@@ -43,3 +43,36 @@ Stage Summary:
 - Requirements: /home/z/my-project/download/requirements.txt
 - README: /home/z/my-project/download/README.md
 - Core transcription pipeline fully functional and tested
+
+---
+Task ID: 7
+Agent: Main Agent
+Task: Major rewrite: fix pydub crash, fix API format, add full pipeline
+
+Work Log:
+- Diagnosed pydub/audioop crash on Python 3.13+ (audioop module removed)
+- Confirmed OpenCode Go API base URL is https://opencode.ai/zen/go/v1 (NOT opencode.go)
+- Tested audio_url format vs input_audio — audio_url returns 200 with content in `content` field
+- Verified MiMo V2.5 returns transcript in `content` with max_tokens=1024+ (otherwise goes to reasoning_content)
+- Replaced all pydub functions with ffmpeg subprocess calls: convert_to_wav, get_audio_duration, chunk_audio_wav, wav_to_base64
+- Fixed API audio message format from input_audio to audio_url with data URI
+- Added full 6-stage pipeline: Transcribe → Seed Research → Deep Research (adversarial) → Circular Dependencies → Atomic Graph → RAG
+- Added YouTube cookie upload option for authentication
+- Added RAG query functionality
+- Removed pydub from requirements.txt
+- Updated README with full pipeline documentation
+- Tested all 6 pipeline stages — all return 200 with correct data
+- Committed and pushed to GitHub (commit 85849fc)
+
+Stage Summary:
+- App fully rewritten and tested — no pydub dependency, Python 3.13+ safe
+- API format fixed: audio_url with base64 data URI
+- All 6 pipeline stages verified working:
+  1. Transcription: MiMo V2.5 returns accurate transcript
+  2. Seed Research: Generates structured research seeds with topics, claims, questions
+  3. Deep Research: Adversarial analysis with claim verification, blind spot detection
+  4. Circular Dependencies: Clean structured output with logical flow
+  5. Atomic Graph: Returns valid JSON knowledge graph with nodes and edges
+  6. RAG: Save and query documents successfully
+- YouTube still requires cookies from cloud IPs (documented with cookie upload UI)
+- Pushed to GitHub: https://github.com/zazikant/audio-transcript-mimo

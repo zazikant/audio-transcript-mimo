@@ -1,14 +1,34 @@
-# Audio → Transcript | MiMo V2.5 ASR
+# Audio → Knowledge Pipeline | MiMo V2.5 ASR
 
-A Streamlit app that converts audio to `transcript.txt` using **MiMo V2.5** multimodal ASR via the **OpenCode Go API**.
+A Streamlit app that converts audio to structured knowledge using **MiMo V2.5** omnimodal ASR via the **OpenCode Go API**.
 
 ## Features
 
 - 🎙️ **3 Input Modes**: Upload audio, record from mic, or paste a YouTube URL
-- 🧠 **MiMo V2.5 ASR**: State-of-the-art multimodal speech recognition
+- 🧠 **MiMo V2.5 ASR**: State-of-the-art omnimodal speech recognition
 - ⏱️ **Long Audio Support**: Handles files up to 1 hour with intelligent chunking
-- 🔄 **Pipeline Integration**: Circular Dependencies cleanup, Atomic Graph knowledge mapping, RAG second brain
-- 📄 **Multiple Outputs**: Download as `.txt` or `.json`, save to RAG
+- 🌱 **Seed Research**: Extract topics, claims, and research directions
+- 🔬 **Deep Research**: Adversarial analysis to stress-test claims
+- 🔄 **Circular Dependencies**: Structure and clean telegraphic notes
+- 🧬 **Atomic Graph**: Knowledge graph from transcript
+- 🧠 **RAG Second Brain**: Store and query documents
+- 📄 **Multiple Outputs**: Download as `.txt`, `.json`, or `.md`
+
+## Pipeline
+
+```
+🎤 Audio Input → Transcription (MiMo V2.5)
+         ↓
+🌱 Seed Research (extract topics & claims)
+         ↓
+🔬 Deep Research (adversarial analysis)
+         ↓
+🔄 Circular Dependencies Cleanup (structure & polish)
+         ↓
+🧬 Atomic Graph (knowledge map)
+         ↓
+🧠 RAG Second Brain (store & query)
+```
 
 ## Setup
 
@@ -31,17 +51,12 @@ streamlit run app.py
 
 MP3, WAV, M4A, OGG, WEBM, FLAC, AAC
 
-## Architecture
+## YouTube Downloads
 
-```
-Input → Convert to WAV → Chunk (if >5 min) → Transcribe via MiMo V2.5 → Merge → transcript.txt
-                                                                                           ↓
-                                                                              Circular Dependencies Cleanup
-                                                                                           ↓
-                                                                              Atomic Graph Knowledge Map
-                                                                                           ↓
-                                                                              RAG Second Brain Storage
-```
+YouTube requires authentication from cloud IPs. To download YouTube audio:
+1. Install a browser cookie extension (e.g., "Get cookies.txt LOCALLY")
+2. Export your YouTube cookies in Netscape format
+3. Upload the cookies.txt file in the YouTube tab
 
 ## Configuration
 
@@ -52,8 +67,9 @@ Input → Convert to WAV → Chunk (if >5 min) → Transcribe via MiMo V2.5 → 
 | `CHUNK_DURATION_MIN` | `3` | Chunk duration in minutes |
 | `CHUNK_OVERLAP_SEC` | `5` | Overlap between chunks |
 
-## API Details
+## Technical Details
 
-- **Base URL**: `https://opencode.ai/zen/go/v1`
-- **Model**: `mimo-v2.5` (multimodal, supports audio input)
-- **Format**: OpenAI-compatible chat completions with `input_audio` content type
+- **No pydub**: Uses ffmpeg directly (Python 3.13+ safe)
+- **API Base URL**: `https://opencode.ai/zen/go/v1`
+- **Audio Format**: `audio_url` with base64 data URI
+- **Model**: `mimo-v2.5` (omnimodal, supports audio input)
