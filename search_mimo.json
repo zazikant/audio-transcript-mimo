@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://opencode.ai/docs/zen",
+    "name": "Zen - OpenCode",
+    "snippet": "You can also access our models through the following API endpoints. Model ... https://opencode.ai/zen/v1/chat/completions, @ai-sdk/openai-compatible.",
+    "host_name": "opencode.ai",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/posit-dev/positron/issues/13662",
+    "name": "Custom Provider rejects valid OpenAI-compatible API key  - GitHub",
+    "snippet": "Custom Provider rejects a valid OpenAI-compatible API key when using the OpenCode Go API endpoint. both /models and /chat/completions . ...",
+    "host_name": "github.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://opencode.ai/docs/go",
+    "name": "Go - OpenCode",
+    "snippet": "You can also access Go models through the following API endpoints. https://opencode.ai/zen/go/v1/chat/completions\nYou can also access Go models through the following API endpoints. ... https://opencode.ai/zen/go/v1/chat/completions, @ai-sdk/openai ...",
+    "host_name": "opencode.ai",
+    "rank": 2,
+    "date": "Jun 5, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.openclaw.ai/concepts/model-providers",
+    "name": "Model providers - OpenClaw Docs",
+    "snippet": "Base URL: https://api.kilo.ai/api/gateway/ OpenAI-compatible base URL is https://api.cerebras.ai/v1 . to add custom providers. For api: \"openai-completions\" on ...\nOpenClaw uses LM Studio's native /api/v1/models and /api/v1/models/load for discovery + auto-load, with /v1/chat/completions for inference by default. If you ...",
+    "host_name": "docs.openclaw.ai",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://hermes-agent.nousresearch.com/docs/integrations/providers",
+    "name": "AI Providers | Hermes Agent - nous research",
+    "snippet": "Hermes Agent works with any OpenAI-compatible API endpoint. If a server implements /v1/chat/completions , you can point Hermes at it. This means you can use ...",
+    "host_name": "hermes-agent.nousresearch.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.ionos.com/cloud/ai/ai-model-hub/how-tos/opencode-integration",
+    "name": "OpenCode Integration | Products - Documentation - IONOS",
+    "snippet": "Confirm the base URL is https://openai.inference.de-txl.ionos.com/v1 . The URL must end with /v1 , not /v1/chat/completions .",
+    "host_name": "docs.ionos.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://lmstudio.ai/docs/developer/openai-compat",
+    "name": "OpenAI Compatibility Endpoints - LM Studio",
+    "snippet": "You can reuse existing OpenAI clients (in Python, JS, C#, etc) by switching up the \"base URL\" property to point to your LM Studio instead of OpenAI's servers.",
+    "host_name": "lmstudio.ai",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://haimaker.ai/blog/opencode-custom-provider-setup",
+    "name": "OpenCode Custom Provider Setup: Add Any OpenAI-Compatible API",
+    "snippet": "Custom config is most useful when you need a custom base URL, a gateway, or a model .baseURL : the base URL for the provider's API. field of a ...",
+    "host_name": "haimaker.ai",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.deepinfra.com/chat/overview",
+    "name": "Chat Completions - DeepInfra",
+    "snippet": "The only changes you need to make from your existing OpenAI code: Set base_url to https://api.deepinfra.com/v1/openai; Set api_key to your DeepInfra token ...",
+    "host_name": "docs.deepinfra.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.vllm.ai/en/v0.18.0/serving/openai_compatible_server",
+    "name": "OpenAI-Compatible Server - vLLM Documentation",
+    "snippet": "vLLM provides an HTTP server that implements OpenAI's Completions API, Chat API, and more! This functionality lets you serve models and interact with them using ...",
+    "host_name": "docs.vllm.ai",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

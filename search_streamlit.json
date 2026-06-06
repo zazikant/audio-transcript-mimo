@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://www.youtube.com/watch?v=8rb9GefC_CU",
+    "name": "How to Build a Real-Time Transcription Web App in Python using",
+    "snippet": "In this video, you will learn how to build a real-time transcription web app in Python using the AssemblyAI API and the Streamlit web ...",
+    "host_name": "www.youtube.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://naveen-malla.medium.com/transcribing-any-youtube-video-with-python-a-step-by-step-guide-cea7dd4e32f5",
+    "name": "Transcribing any Youtube Video with Python: A Step-by-Step guide",
+    "snippet": "This guide will walk you through a step-by-step process to build a YouTube audio transcription application using Python, Streamlit, and the Whisper model by ...",
+    "host_name": "naveen-malla.medium.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/Python/comments/hyrtfw/i_made_a_youtube_downloader_with_python_and",
+    "name": "I made a YouTube downloader with Python and Streamlit  - Reddit",
+    "snippet": "30 votes, 15 comments. So streamlit was used to build the user interface? It looks like a very powerful tool I never heard of it before this ...",
+    "host_name": "www.reddit.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=CrLmgrGiVVY",
+    "name": "How to make a web app that transcribes YouTube videos with",
+    "snippet": "Let's build an interactive web app that can transcribe YouTube videos in minutes! Streamlit is a great Python library that makes web ...",
+    "host_name": "www.youtube.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discuss.streamlit.io/t/streamlit-youtube-downloader-app-works-locally-but-fails-on-streamlit-cloud-with-modulenotfounderror-yt-dlp/107708",
+    "name": "Streamlit YouTube Downloader App Works Locally but Fails on",
+    "snippet": "I'm building a YouTube video downloader app using yt-dlp . YouTube blocks the call and gives a 403 error. Streamlit App works on localhost",
+    "host_name": "discuss.streamlit.io",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/yt-dlp/yt-dlp",
+    "name": "yt-dlp/yt-dlp: A feature-rich command-line audio/video downloader",
+    "snippet": "yt-dlp is a feature-rich command-line audio/video downloader with support for thousands of sites. The project is a fork of youtube-dl based on the now inactive ...",
+    "host_name": "github.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/Python/comments/xnrry3/just_created_a_simple_python_app_it_converts",
+    "name": "Just created a simple Python app. It converts YouTube audio to text",
+    "snippet": "I just created a simple Python app that converts Youtube audios to text using openai/whisper library. I can just yt-dlp it youtube-dl (and its ...",
+    "host_name": "www.reddit.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.assemblyai.com/blog/how-to-make-a-web-app-that-transcribes-youtube-videos-with-streamlit",
+    "name": "How to Make a Web App that Transcribes YouTube Videos with",
+    "snippet": "transcribe YouTube videos in minutes! Streamlit is a great Python library. We will use three main libraries: Streamlit, YouTube_dl and FFmpeg. ...",
+    "host_name": "www.assemblyai.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://python.plainenglish.io/making-youtube-video-and-audio-downloader-web-app-using-python-in-2025-4859b0e4458a",
+    "name": "Making A YouTube Video and Audio Downloader Web App Using",
+    "snippet": "Let's learn how to create a simple URL shortener using Python and Streamlit, a simple program to simplify long URL.",
+    "host_name": "python.plainenglish.io",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://jeremywhittaker.com/index.php/2024/12/03/youtube-videos-to-mp3-and-transcription",
+    "name": "YouTube Videos to MP3 and Transcription - Jeremy Whittaker",
+    "snippet": "This script will do exactly that. I also added transcription for analysis. Just put in your link and it will generate the MP3 and TXT file.",
+    "host_name": "jeremywhittaker.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

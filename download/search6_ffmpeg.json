@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://stackoverflow.com/questions/32073278/python-convert-mp3-to-wav-with-pydub",
+    "name": "Python convert mp3 to wav with Pydub - Stack Overflow",
+    "snippet": "The pydub module uses either ffmpeg or avconf programs to do the actual conversion. So you do have to install ffmpeg to make this work.",
+    "host_name": "stackoverflow.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://transloadit.com/devtips/harnessing-python-for-versatile-audio-encoding",
+    "name": "Harnessing Python for versatile audio encoding - Transloadit",
+    "snippet": "In this guide, we explore how to effectively encode audio in Python, leveraging powerful libraries like Pydub (version 0.25.1) and tools like FFmpeg.",
+    "host_name": "transloadit.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=4E7N7W1lUkU",
+    "name": "Python: Converting WAV files to MP3 - YouTube",
+    "snippet": "In this video, we will be using the great pydub module to convert WAV files to MP3. The pydub project may be found at the following GitHub ...",
+    "host_name": "www.youtube.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://pypi.org/project/audioconverter",
+    "name": "audioconverter - PyPI",
+    "snippet": "A simple CLI to convert a directory of audio files from one format to another. This CLI sits ontop of pydub and ffmpeg",
+    "host_name": "pypi.org",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/learnpython/comments/11cei8x/try_to_use_pydub_to_convert_a_mp3file_to_wav",
+    "name": "Try to use pydub to convert a mp3-file to wav? : r/learnpython - Reddit",
+    "snippet": "Hello - i try the following code to convert a mp3- to a wav-file. import os import sys from pydub import AudioSegment if __name__ ...",
+    "host_name": "www.reddit.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@danushidk507/pydub-afe485194295",
+    "name": "Pydub. Audio files are a widespread means of | by DhanushKumar",
+    "snippet": "pydub relies on the FFmpeg library to support many audio formats. It can automatically convert between formats that FFmpeg supports. Here's an ...",
+    "host_name": "medium.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/jiaaro/pydub/issues/363",
+    "name": "Export to AAC from any audio codec #363 - jiaaro/pydub - GitHub",
+    "snippet": "Put audio file (mp3, m4a, wav, etc) in the same folder that the program. Run the program. Expected behavior. Succesful conversion like previous ...",
+    "host_name": "github.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=tP0QYyg4V5c",
+    "name": "How to Convert m4a to mp3 in Python - YouTube",
+    "snippet": "How to Convert m4a to mp3 in Python using pydub. - How to work with Audio Files in Python ... ffmpeg on Windows: https://youtu.be/JR36oH35Fgg.",
+    "host_name": "www.youtube.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://anvil.works/forum/t/using-pydub-to-make-mp3-file-from-audio-file/10743",
+    "name": "Using Pydub to make mp3 file from audio file - Anvil Works",
+    "snippet": "I'm trying to convert an audio file that has been (successfully) uploaded to my data table to mp3 format. I'd like to convert “call_audio.mp3” to an mp3.",
+    "host_name": "anvil.works",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://campus.datacamp.com/courses/spoken-language-processing-in-python/processing-text-transcribed-from-spoken-language?ex=2",
+    "name": "Converting audio to the right format | Python",
+    "snippet": "Import the filename parameter using AudioSegment 's from_file() . · Set the export format to \"wav\" . · Pass the target audio file, call_1.mp3 , to the function.",
+    "host_name": "campus.datacamp.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]
