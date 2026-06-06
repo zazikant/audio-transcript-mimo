@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://github.com/XiaomiMiMo/MiMo-V2.5-ASR",
+    "name": "XiaomiMiMo/MiMo-V2.5-ASR: Robust Speech Recognition  - GitHub",
+    "snippet": "It is built to deliver accurate and robust transcription across Mandarin Chinese and English, multiple Chinese dialects, code-switched speech, song lyrics, ...",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://platform.xiaomimimo.com/docs/en-US/usage-guide/Speech-Recognition",
+    "name": "Speech Recognition（MiMo-V2.5-ASR）",
+    "snippet": "Speech recognition converts input audio into text output, suitable for meeting transcription, lyrics recognition, dialect transcription, noisy ...",
+    "host_name": "platform.xiaomimimo.com",
+    "rank": 1,
+    "date": "Jun 2, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://x.com/XiaomiMiMo/status/2047381521351450913",
+    "name": "MiMo-V2.5-ASR — hear every word, even when speech gets messy",
+    "snippet": "Good ASR isn't just about transcribing clean audio. It's about understanding real speech: accents, code-switching, noisy environments, ...",
+    "host_name": "x.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.5-ASR/discussions/1",
+    "name": "XiaomiMiMo/MiMo-V2.5-ASR · In auto mode, the language tag tends",
+    "snippet": "Regardless of the tag used, however, the transcription results under auto mode are already sufficiently accurate. In fact, the Language Tag is ...",
+    "host_name": "huggingface.co",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=3lXBYgXM090",
+    "name": "MiMo-V2.5-ASR: Xiaomi Just Silenced Everyone With  - YouTube",
+    "snippet": "This video locally installs MiMo-V2.5-ASR which end-to-end automatic speech recognition (ASR) model ... audio sample https://elevenlabs.io/ All",
+    "host_name": "www.youtube.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/LocalLLaMA/comments/1stpxko/xiaomimimomimov25asr_hugging_face",
+    "name": "XiaomiMiMo/MiMo-V2.5-ASR · Hugging Face : r/LocalLLaMA - Reddit",
+    "snippet": "It is built to deliver accurate and robust transcription across Mandarin Chinese and English, multiple Chinese dialects, code-switched speech, ...",
+    "host_name": "www.reddit.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.producthunt.com/products/mimo-v2-5-voice",
+    "name": "MiMo-V2.5 Voice: Bilingual ASR for dialects, code-switching, and",
+    "snippet": "MiMo-V2.5-ASR is an 8B open-source speech recognition model from Xiaomi that transcribes Mandarin, English, eight Chinese dialects, code-switched speech, ...",
+    "host_name": "www.producthunt.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://recipes.vllm.ai/XiaomiMiMo/MiMo-V2.5",
+    "name": "XiaomiMiMo/MiMo-V2.5 - vLLM Recipes",
+    "snippet": "MiMo-V2.5 is a native omnimodal model with strong agentic capabilities, supporting text, image, video, and audio understanding within a unified architecture.",
+    "host_name": "recipes.vllm.ai",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=8rb9GefC_CU",
+    "name": "How to Build a Real-Time Transcription Web App in Python using",
+    "snippet": "In this video, you will learn how to build a real-time transcription web app in Python using the AssemblyAI API and the Streamlit web ...",
+    "host_name": "www.youtube.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/data-science-in-your-pocket/xiaomi-mimo-v2-5-pro-best-open-source-llm-is-here-beats-kimi-k2-6-glm-5-1-8f12007b444a",
+    "name": "Xiaomi MiMo-V2.5-Pro : Best Open-Source LLM is here, beats Kimi",
+    "snippet": "What Is the Best Local LLM for Coding in 2026? A practical guide to choosing local coding models by hardware tier, workflow, latency, and ...",
+    "host_name": "medium.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://stackoverflow.com/questions/45526996/split-audio-files-using-silence-detection",
+    "name": "Split audio files using silence detection - python - Stack Overflow",
+    "snippet": "I've more than 200 MP3 files and I need to split each one of them by using silence detection. I tried Audacity and WavePad but they do not have batch processes.",
+    "host_name": "stackoverflow.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@danushidk507/pydub-afe485194295",
+    "name": "Pydub. Audio files are a widespread means of | by DhanushKumar",
+    "snippet": "pydub.silence.detect_silence(): A function to detect silence in an AudioSegment. pydub.effects.fade(): A function to apply fade-in and fade ...",
+    "host_name": "medium.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/jiaaro/pydub/blob/master/pydub/silence.py",
+    "name": "pydub/pydub/silence.py at master · jiaaro/pydub - GitHub",
+    "snippet": "Various functions for finding/manipulating silence in AudioSegments \"\"\" import itertools from .utils import db_to_float def detect_silence(audio_segment, ...",
+    "host_name": "github.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/learnpython/comments/dzb931/detect_silence_in_raw_audio_with_pydub",
+    "name": "detect silence in raw audio with pydub : r/learnpython - Reddit",
+    "snippet": "Hi, I have a file containing raw audio that I created by recording a pulseaudio sink. Now I want to use pydub to detect silence.",
+    "host_name": "www.reddit.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://codesignal.com/learn/courses/transcribing-large-files-in-python-using-pydub/lessons/introduction-to-audio-processing-with-pydub",
+    "name": "Introduction to Audio Processing with PyDub | CodeSignal Learn",
+    "snippet": "... silence detection, audio normalization, and effects processing. For example, here's how you might split a long audio file into smaller chunks using PyDub:.",
+    "host_name": "codesignal.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=hxrji94sD7o",
+    "name": "How to Auto detect & remove silence from audio using Python",
+    "snippet": ", this tutorial will guide you through automating silence detection to streamline your workflow. We'll be using popular libraries like pydub ...",
+    "host_name": "www.youtube.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://milvus.io/ai-quick-reference/how-do-you-segment-audio-files-for-effective-indexing",
+    "name": "How do you segment audio files for effective indexing? - Milvus",
+    "snippet": "For example, tools like FFmpeg or Python's PyDub library can split audio at points where silence exceeds a threshold (e.g., 500ms), creating segments around ...",
+    "host_name": "milvus.io",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://plainenglish.io/python/remove-silence-from-your-audio-in-python-with-pydub-417e4b1b363c",
+    "name": "Remove Silence from Your Audio in Python with 'pydub'",
+    "snippet": "Today we are going to take a look at how to use pydub to remove silence from your audio. This can be useful to shorten or clean your audio files ...",
+    "host_name": "plainenglish.io",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://dsp.stackexchange.com/questions/17628/python-audio-detecting-silence-in-audio-signal",
+    "name": "python; audio; detecting silence in audio signal",
+    "snippet": "Split an audio signal into non-silent intervals. Given sampling rate of 8000 it will split the audio by detecting audio lower than 40db for period of 1 sec.",
+    "host_name": "dsp.stackexchange.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=I0VMsp5Ym6k",
+    "name": "python split audio on silence - YouTube",
+    "snippet": "Download this code from https://codegive.com Certainly! Splitting audio on silence in Python can be achieved using the pydub library, ...",
+    "host_name": "www.youtube.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

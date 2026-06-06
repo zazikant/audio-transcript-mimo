@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://discuss.streamlit.io/t/is-st-audio-input-working/112790",
+    "name": "Is st.audio_input working? - Using Streamlit",
+    "snippet": "I tried a simple command below: tst_audio = st.audio_input(label='Rec Audio:') After stopping the audio record, it takes forever to save the file, if it ...",
+    "host_name": "discuss.streamlit.io",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://brendg.co.uk/2025/04/01/using-streamlit-to-record-audio-and-save-to-a-file-%F0%9F%8E%99%EF%B8%8F",
+    "name": "Using Streamlit to record audio and save to a file 🎙️",
+    "snippet": "Streamlit has st.audio_input, which can record audio from a users' microphone, however I needed a way to save the recorded audio to the server running the ...",
+    "host_name": "brendg.co.uk",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.streamlit.io/develop/api-reference/widgets/st.audio_input",
+    "name": "st.audio_input - Streamlit Docs",
+    "snippet": "Display a widget that returns an audio recording from the user's microphone. Function signature[source]. st.audio_input(label, *, sample_rate=16000, key=None ...",
+    "host_name": "docs.streamlit.io",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discuss.streamlit.io/t/streamlit-not-able-to-access-client-mic-while-implementing-stt/82413",
+    "name": "Streamlit not able to access client mic while implementing STT",
+    "snippet": "I recommend trying out st.audio_input . Unless a library for audio input is specifically written to work with Streamlit, deployed apps won't ...",
+    "host_name": "discuss.streamlit.io",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discuss.streamlit.io/t/st-audio-input-not-recording-audio-in-any-browser/119796",
+    "name": "`st.audio_input()` not recording audio in any browser - Using Streamlit",
+    "snippet": "I'm trying to implement voice input in my Streamlit app using st.audio_input() . The widget renders correctly and shows the microphone interface ...",
+    "host_name": "discuss.streamlit.io",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/streamlit/streamlit/issues/9710",
+    "name": "Ability to clear audio from st.audio_input programmatically #9710",
+    "snippet": "This is for voice input to a chatbot. Why? After I process the audio, I need to clear the audio so that user can start asking the next question.",
+    "host_name": "github.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discuss.streamlit.io/t/st-audio-input-to-mp3-file/85240",
+    "name": "St.audio_input to mp3 file - Using Streamlit",
+    "snippet": "I'm trying to transform a st.audio_input record on a mp3 file and save it locally, how can i do it? 1 Like system Closed May 7, 2025, 11:52pm",
+    "host_name": "discuss.streamlit.io",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discuss.streamlit.io/t/error-when-using-st-audio-input-for-large-files/85065",
+    "name": "Error when using st.audio_input for large files",
+    "snippet": "I'm creating a demo app that performs various operations on audio files. I've been trying out the new st.audio_input feature and most of the ...",
+    "host_name": "discuss.streamlit.io",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discuss.streamlit.io/t/audio-input-programmatically-clear-the-recording/94622",
+    "name": "Audio_input - Programmatically Clear the Recording - Using Streamlit",
+    "snippet": "After recording an audio clip with audio_input, I want to programmatically provide a mechanism to remove the recorded clip.",
+    "host_name": "discuss.streamlit.io",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://audio-input-preview.streamlit.app",
+    "name": "Audio input demo",
+    "snippet": "st.experimental_audio_input displays a widget that returns audio from the user's microphone. This feature will be released in Streamlit 1.39.",
+    "host_name": "audio-input-preview.streamlit.app",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://github.com/jiaaro/pydub/issues/725",
+    "name": "Python 3.12 · Issue #725 · jiaaro/pydub - audioop deprecation - GitHub",
+    "snippet": "pyaudioop is not an alternative. It does not provide a number of functions, like lin2alaw. We have to stop upgrading python for existing and new audio code ...",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discuss.streamlit.io/t/error-loading-ffprobe-when-deploying-onto-streamlit-cloud/66322",
+    "name": "Error loading ffprobe when deploying onto streamlit cloud",
+    "snippet": "When deploying to streamlit cloud, I receive the error “No such file or directory: 'ffprobe'” although I have ffmpeg in my packages.txt and ffmpeg-python==0.2. ...",
+    "host_name": "discuss.streamlit.io",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/Python/comments/17wf0y0/is_there_a_replacement_for_audioop",
+    "name": "Is there a replacement for audioop? : r/Python - Reddit",
+    "snippet": "Is there a replacement for audioop? I have some code that relies on the ratecv and lin2ulaw and I would prefer to not have to handcode audio ...\nAlternatives to audioop in Python 3.13 discord.py project of a replacement specifically for audioop. Is there a good audio library like Pydub?",
+    "host_name": "www.reddit.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/71353587/ffmpeg-not-working-from-python-subprocess-but-works-from-terminal/71354136",
+    "name": "FFMPEG not working from python subprocess but works from terminal",
+    "snippet": "I am trying to download a portion of a long youtube video using youtube-dl and ffmpeg. My commands work from the terminal and downloaded ...",
+    "host_name": "stackoverflow.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=x19qoZ7OayA",
+    "name": "How to cut or Slice Audio using Pydub - YouTube",
+    "snippet": "Python Programming. MP3 File cutter using pydub library and ffmpeg. Programming is my hobby. Here Visual Basic .net , Netbeans Java, JavaFX, ...",
+    "host_name": "www.youtube.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://transloadit.com/devtips/harnessing-python-for-versatile-audio-encoding",
+    "name": "Harnessing Python for versatile audio encoding - Transloadit",
+    "snippet": "In this guide, we explore how to effectively encode audio in Python, leveraging powerful libraries like Pydub (version 0.25.1) and tools like FFmpeg.",
+    "host_name": "transloadit.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://deepgram.com/learn/best-python-audio-manipulation-tools",
+    "name": "Best Python Tools for Manipulating Audio Data - Deepgram Blog ⚡️",
+    "snippet": "Changing volume with the AudioSegment object from pydub is extremely easy. After importing the libraries and functions we need and opening up ...\nffmpeg-python pydub library is a swiss army knife of audio manipulation tools. To trim audio data with pydub , we only need the AudioSegment ...",
+    "host_name": "deepgram.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.python.org/3/library/audioop.html",
+    "name": "audioop — Manipulate raw audio data — Python 3.14.5",
+    "snippet": "This module is no longer part of the Python standard library. It was removed in Python 3.13 after being deprecated in Python 3.11.",
+    "host_name": "docs.python.org",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://forum.freecodecamp.org/t/python-streamlit-app-ffmpeg-error/693688",
+    "name": "Python streamlit app, ffmpeg error - The freeCodeCamp Forum",
+    "snippet": "I am making a python streamlit app using yt-dlp and when I click on download button then it shows that *ffmpeg *is not installed and the other ...",
+    "host_name": "forum.freecodecamp.org",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=8rb9GefC_CU",
+    "name": "How to Build a Real-Time Transcription Web App in Python using",
+    "snippet": "In this video, you will learn how to build a real-time transcription web app in Python using the AssemblyAI API and the Streamlit web ...",
+    "host_name": "www.youtube.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

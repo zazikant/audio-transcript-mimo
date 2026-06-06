@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://www.reddit.com/r/youtubedl/comments/1pgikzd/cant_pass_the_cookies",
+    "name": "Can't pass the cookies : r/youtubedl - Reddit",
+    "snippet": "a common issue is that your cookies were exported from your normal browser session, which youtube will rotate, so cookies expires very quickly.",
+    "host_name": "www.reddit.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/yt-dlp/yt-dlp/issues/16229",
+    "name": "[YouTube] Cookies no longer working · Issue #16229 · yt-dlp/yt-dlp",
+    "snippet": "When I authenticate using a YouTube Premium cookie, all formats (including audio) show up correctly. That's not really the same issue, I'm ...",
+    "host_name": "github.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://pypi.org/project/yt-dlp",
+    "name": "yt-dlp - PyPI",
+    "snippet": "yt-dlp is a feature-rich command-line audio/video downloader with support for thousands of sites. The project is a fork of youtube-dl based on the now inactive ...",
+    "host_name": "pypi.org",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://ytdlnis.org/docs/guides/cookies",
+    "name": "Cookies | Guides - YTDLnis",
+    "snippet": "Cookies allow you to: To create one, hit New Cookie and write out the website domain name. For example https://youtube.com. A browser window will open up.",
+    "host_name": "ytdlnis.org",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.ditig.com/yt-dlp-cheat-sheet",
+    "name": "yt-dlp cheat sheet - Ditig",
+    "snippet": "This yt-dlp cheat sheet explains command-line options for downloading video, audio, subtitles, playlists, and livestreams. Contains a yt-dlp ...",
+    "host_name": "www.ditig.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://superuser.com/questions/1871179/why-wont-log-in-with-yt-dlp-on-windows-with-username-and-password-and-wont-log",
+    "name": "Why won't log in with yt-dlp on Windows with username and",
+    "snippet": "Login with password is not supported for YouTube. Use --cookies-from-browser or --cookies for the authentication.",
+    "host_name": "superuser.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=DsS1jCDZGek",
+    "name": "How to Use yt-dlp and Cookies to Download Member Only Videos",
+    "snippet": "Learn how to use yt-dlp and cookies to download member-only videos effortlessly. ✓ yt-dlp: https://github.com/yt-dlp/yt-dlp ✓ Get ...",
+    "host_name": "www.youtube.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://discuss.streamlit.io/t/streamlit-youtube-downloader-app-works-locally-but-fails-on-streamlit-cloud-with-modulenotfounderror-yt-dlp/107708",
+    "name": "Streamlit YouTube Downloader App Works Locally but Fails on",
+    "snippet": "I'm building a YouTube video downloader app using yt-dlp. It works perfectly locally (via streamlit run), but when I deploy it to Streamlit Community Cloud, I ...",
+    "host_name": "discuss.streamlit.io",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://feedback.vrchat.com/feature-requests/p/allow-passing-cookies-to-yt-dlp-for-get-around-youtube-restrictions",
+    "name": "Allow passing cookies to yt-dlp for get around YouTube restrictions",
+    "snippet": "I have discover a way that can effectively get around it, which is --cookies argument. Good news is yt-dlp itself supports accepting additional arguments.",
+    "host_name": "feedback.vrchat.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://apple.stackexchange.com/questions/349697/how-to-use-youtube-dl-cookies",
+    "name": "How to use youtube-dl --cookies - Ask Different",
+    "snippet": "The best way is to log in manually in my browser, obtain the authentication cookies somehow, and use the --cookies option.",
+    "host_name": "apple.stackexchange.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

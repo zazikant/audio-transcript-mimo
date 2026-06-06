@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://github.com/tayler6000/pyVoIP/issues/212",
+    "name": "audioop module is deprecated in Python 3.11 and removed  - GitHub",
+    "snippet": "Per the Python docs on the audioop module, the module is deprecated and will be removed in Python 3.13. Seeing that pyVoIP makes liberal use ...",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/Python/comments/17wf0y0/is_there_a_replacement_for_audioop",
+    "name": "Is there a replacement for audioop? : r/Python - Reddit",
+    "snippet": "Is there a replacement for audioop? I have some code that relies on the ratecv and lin2ulaw and I would prefer to not have to handcode audio ...",
+    "host_name": "www.reddit.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.python.org/3/library/audioop.html",
+    "name": "audioop — Manipulate raw audio data — Python 3.14.5",
+    "snippet": "This module is no longer part of the Python standard library. It was removed in Python 3.13 after being deprecated in Python 3.11. The removal was decided ...",
+    "host_name": "docs.python.org",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://pypi.org/project/audioop-lts",
+    "name": "audioop-lts - PyPI",
+    "snippet": "An LTS port of the Python builtin module audioop which was deprecated since version 3.11 and removed in 3.13. This project exists to maintain this module for ...",
+    "host_name": "pypi.org",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/jiaaro/pydub/issues/725",
+    "name": "Python 3.12 · Issue #725 · jiaaro/pydub - audioop deprecation - GitHub",
+    "snippet": "Audioop is deprecated as of Python 3.11, removal in 3.13 (source). What's the plan for its replacement once it's no longer available?",
+    "host_name": "github.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://gitlab.archlinux.org/archlinux/packaging/packages/python-pydub/-/issues/1",
+    "name": "Fix import instead of using audioop-lts (#1) · Issue - GitLab",
+    "snippet": "Description: The audioop module has been removed in Python 3.13 and the Pydub developers has introduced pyaudioop to replace it.",
+    "host_name": "gitlab.archlinux.org",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://dev.to/plzbugmenot/how-to-fix-module-audioop-missing-690",
+    "name": "How to fix \"Module 'audioop' Missing\"? - DEV Community",
+    "snippet": "I am building a Discord bot using Python (discord.py) and encountered an error stating \"Module 'audioop' Missing.\" The error traceback is as follows:",
+    "host_name": "dev.to",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.scribd.com/document/930453773/Audio-Op",
+    "name": "Audioop Module Removal in Python 3.13 | PDF - Scribd",
+    "snippet": "This module is no longer part of the Python standard library. It was. removed in Python 3.13 after being deprecated in Python 3.11. The removal was decided ...",
+    "host_name": "www.scribd.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://stackoverflow.com/questions/79258009/i-was-trying-to-use-the-discord-api-but-when-i-enter-import-discord-it-gets-se",
+    "name": "python - I was trying to use the discord api. But when i enter import",
+    "snippet": "It's an issue with discord.py 's dependencies, audioop has been deprecated since python 3.11 and removed from stdlib since python 3.13.",
+    "host_name": "stackoverflow.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=d2Y0lGrRoMI",
+    "name": "Installation of FFmpeg & Microsoft Build Tools | Python Audio Text",
+    "snippet": "In this video, I will show you how to install the Pydub Library of Python but the installation of Pydub in Python is not an easy task.",
+    "host_name": "www.youtube.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

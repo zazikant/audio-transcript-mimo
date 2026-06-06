@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://stackoverflow.com/questions/75867758/how-to-extract-only-audio-from-downloading-video-python-yt-dlp",
+    "name": "How to extract only audio from downloading video? Python yt-dlp",
+    "snippet": "I need to download only audio from youtube video. For this I use the yt-dlp tool. In the console, I enter the following command, which downloads the audio as a ...",
+    "host_name": "stackoverflow.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/youtubedl/comments/16t2f61/getting_only_audio_mp3_320_in_python",
+    "name": "Getting only audio, mp3, 320, in python : r/youtubedl - Reddit",
+    "snippet": "So I'm trying to download the audio only of a video, and would like to get it in mp3 in 320kbps, but I can't get to do it, I only either get ...",
+    "host_name": "www.reddit.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/yt-dlp/yt-dlp",
+    "name": "yt-dlp/yt-dlp: A feature-rich command-line audio/video downloader",
+    "snippet": "yt-dlp is a feature-rich command-line audio/video downloader with support for thousands of sites. The project is a fork of youtube-dl based on the now inactive ...",
+    "host_name": "github.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://dev.to/_ken0x/downloading-and-converting-youtube-videos-to-mp3-using-yt-dlp-in-python-20c5",
+    "name": "Downloading and Converting YouTube Videos to MP3 using yt-dlp",
+    "snippet": "This post explains how to download and convert YouTube videos into MP3 files using Python and yt-dlp, guaranteeing a high-quality result.",
+    "host_name": "dev.to",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=vhYwMNbnN4w",
+    "name": "YouTube extraction of audio in MP3 format, do it yourself!",
+    "snippet": "Write a Python program to download the audio only of a YouTube video ... yt-dlp with selected bitrate def download_audio(): url ...",
+    "host_name": "www.youtube.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://blog.elijahlopez.ca/posts/yt-dlp-audio-download",
+    "name": "yt-dlp Audio Download Tutorial - ELL Blog",
+    "snippet": "I thought I'd create this article and a future video on how to use yt-dlp to download audio from websites, primarily YouTube.",
+    "host_name": "blog.elijahlopez.ca",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://ostechnix.com/yt-dlp-tutorial",
+    "name": "Yt-dlp Commands: The Complete Tutorial For Beginners (2026)",
+    "snippet": "This yt-dlp tutorial lists the most common yt-dlp commands for downloading videos and audio from YouTube and various other websites on ...",
+    "host_name": "ostechnix.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://andsilvadrcc.medium.com/high-quality-audio-extraction-from-youtube-with-python-1ecb799bf9a3",
+    "name": "High-Quality Audio Extraction from YouTube with Python | by andvsilva",
+    "snippet": "A practical guide to extracting high-quality audio from YouTube videos with Python libraries and automating the process with ffmpeg.",
+    "host_name": "andsilvadrcc.medium.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://python.plainenglish.io/downloading-youtube-videos-extracting-audio-and-generating-transcripts-with-python-and-jupyter-c3068f82bbe0",
+    "name": "Downloading YouTube Videos, Extracting Audio, and Generating",
+    "snippet": "Demonstrates three different ways to download YouTube videos and extract audio to mp3. Demonstrates using the Python Speech Recognition ...",
+    "host_name": "python.plainenglish.io",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.spacebar.news/how-to-download-audio-only-media-files-with-yt-dlp",
+    "name": "Yt-dlp: How to download audio-only media files - The Spacebar",
+    "snippet": "You can download videos and audio as MP3, M4A, OGG, or other audio formats with the yt-dlp command line tool.",
+    "host_name": "www.spacebar.news",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]
