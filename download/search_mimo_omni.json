@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://platform.xiaomimimo.com/docs/en-US/updates/model",
+    "name": "Model Release - Xiaomi MiMo API Open Platform",
+    "snippet": "MiMo-V2-Pro / Omni will auto-route to V2.5 (with V2.5 pricing) on June 1, 2026, 00:00 (GMT+8), and will be fully deprecated by June 30.Please migrate to the ...",
+    "host_name": "platform.xiaomimimo.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.reddit.com/r/opencodeCLI/comments/1tpee9t/opencode_x_mimo_v25_free_for_a_limited_time",
+    "name": "OpenCode x MiMo V2.5 - Free for a limited time : r/opencodeCLI",
+    "snippet": "According to AA mimo 2.5 is beating ds4 flash, and mimo 2.5 pro also beats ds4 pro on the same thinking level, but doesn't do max where ds4 pro ...",
+    "host_name": "www.reddit.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://aimlapi.com/models/mimo-v2-5",
+    "name": "MiMo-V2.5 - AIMLAPI",
+    "snippet": "Released on April 22, 2026 by Xiaomi's AI team, MiMo-V2.5 picks up where MiMo-V2-Omni left off, with substantially better agentic performance, ...",
+    "host_name": "aimlapi.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://mimo.xiaomi.com/mimo-v2-5",
+    "name": "Xiaomi MiMo-V2.5",
+    "snippet": "Today, we are releasing MiMo-V2.5, a major step forward in agentic capability and multimodal understanding. With native visual and audio ...",
+    "host_name": "mimo.xiaomi.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=Uel6buESRwA",
+    "name": "Better Agentic Coder Than GLM 5.1 & Kimi K2.6? | Live - YouTube",
+    "snippet": "How good it is in real-world coding projects? Let's try it out with OpenCode and OpenRouter. Blog: https://mimo.xiaomi.com/mimo-v2-5-pro/ AI ...",
+    "host_name": "www.youtube.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://lmspeed.net/model/mimo-v2-5",
+    "name": "MiMo-V2.5 API Pricing (Free) - 61 Providers - LMSpeed",
+    "snippet": "MiMo-V2.5 is available through 61 API providers on LMSpeed. Compare API pricing from $0.0096 to $547.50 per million input tokens across ...",
+    "host_name": "lmspeed.net",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://huggingface.co/XiaomiMiMo/MiMo-V2.5-Base",
+    "name": "XiaomiMiMo/MiMo-V2.5-Base - Hugging Face",
+    "snippet": "MiMo-V2.5 is a native omnimodal model with strong agentic capabilities, supporting text, image, video, and audio understanding within a unified ...",
+    "host_name": "huggingface.co",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://venturebeat.com/technology/open-source-xiaomi-mimo-v2-5-and-v2-5-pro-are-among-the-most-efficient-and-affordable-at-agentic-claw-tasks",
+    "name": "Open source Xiaomi MiMo-V2.5 and V2.5-Pro are among the most",
+    "snippet": "MiMo-V2.5 stands as a testament to the power of sparse architectures and permissive licensing in the race toward functional AGI.",
+    "host_name": "venturebeat.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://x.com/opencode/status/2047003454283850112",
+    "name": "v2.5 Pro → built for coding price unchanged",
+    "snippet": "MiMo v2.5 + MiMo v2.5 Pro now available in Go • v2.5 → multimodal • v2.5 Pro → built for coding price unchanged.",
+    "host_name": "x.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://zenmux.ai/xiaomi/mimo-v2.5",
+    "name": "Xiaomi: MiMo-V2.5 - ZenMux",
+    "snippet": "MiMo-V2.5 is a native omnimodal model by Xiaomi. It delivers Pro-level agentic performance at roughly half the inference cost, while surpassing MiMo-V2-Omni ...",
+    "host_name": "zenmux.ai",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]
