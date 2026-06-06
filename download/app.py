@@ -39,7 +39,7 @@ OPCODE_API_KEY = os.environ.get(
     "sk-ljxfsgwP7tLRFfTIgmMOd7n4vBcXNTM34UAVR30mMCNMU28F9MsHJTKKssdqdhnR"
 )
 OPCODE_BASE_URL = "https://opencode.ai/zen/go/v1"
-MIMO_MODEL = os.environ.get("MIMO_MODEL", "mimo-v2.5")
+MIMO_MODEL = os.environ.get("MIMO_MODEL", "mimo-v2-omni")
 
 # Audio chunking config
 CHUNK_DURATION_MIN = int(os.environ.get("CHUNK_DURATION_MIN", "3"))
@@ -548,7 +548,15 @@ def transcribe_chunk(wav_path: str, language: str = "en",
             return result
 
         except Exception as e:
+            error_str = str(e)
             log.error(f"Transcription API error (attempt {attempt+1}): {e}")
+            # Check for model incompatibility with audio
+            if "image input" in error_str.lower() or "no endpoints found" in error_str.lower():
+                return (
+                    "[TRANSCRIPTION_ERROR: The selected model does not support audio input. "
+                    "Please switch to 'mimo-v2-omni' in the sidebar Settings. "
+                    "Only mimo-v2-omni and mimo-v2.5 support audio transcription.]"
+                )
             if attempt < max_retries - 1:
                 time.sleep(3 * (attempt + 1))
             else:
@@ -954,9 +962,9 @@ def main():
 
         model_choice = st.selectbox(
             "Model",
-            options=["mimo-v2.5", "mimo-v2.5-pro", "mimo-v2-omni"],
+            options=["mimo-v2-omni", "mimo-v2.5"],
             index=0,
-            help="MiMo model to use for transcription"
+            help="mimo-v2-omni: Best for audio (recommended). mimo-v2.5: Also supports audio."
         )
         os.environ["MIMO_MODEL"] = model_choice
 
