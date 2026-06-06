@@ -21,8 +21,10 @@ import re
 import json
 import time
 import base64
+import shutil
 import tempfile
 import logging
+import struct
 import subprocess
 from pathlib import Path
 
@@ -61,101 +63,376 @@ def get_opencode_client() -> OpenAI:
     )
 
 
-# ─── FFmpeg Audio Utilities (pydub-free, Python 3.13+ safe) ──────────────────
+# ─── Audio Utilities (pydub-free, Python 3.13+ safe) ────────────────────────
+# Uses ffmpeg when available, falls back to pure-Python WAV processing
+
+
+def _ffmpeg_available() -> bool:
+    """Check if ffmpeg/ffprobe are available on the system."""
+    try:
+        result = subprocess.run(["ffmpeg", "-version"], capture_output=True, timeout=5)
+        return result.returncode == 0
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
+
+
+_FFMPEG_OK = None  # Lazy-checked
+
+
+def _check_ffmpeg() -> bool:
+    """Lazy check for ffmpeg availability, cached."""
+    global _FFMPEG_OK
+    if _FFMPEG_OK is None:
+        _FFMPEG_OK = _ffmpeg_available()
+        if not _FFMPEG_OK:
+            log.warning("ffmpeg not found — using pure-Python WAV fallback (non-WAV formats will fail)")
+    return _FFMPEG_OK
+
+
+# ── Pure-Python WAV helpers (no ffmpeg needed) ─────────────────────────────
+
+def _read_wav_header(filepath: str) -> dict:
+    """Read WAV file header and return metadata dict.
+
+    Returns dict with keys: channels, bits_per_sample, frame_rate, num_frames, duration_sec
+    """
+    with open(filepath, "rb") as f:
+        riff = f.read(4)
+        if riff != b"RIFF":
+            raise ValueError(f"Not a WAV file (RIFF header missing): {riff}")
+        f.read(4)  # file size
+        wave = f.read(4)
+        if wave != b"WAVE":
+            raise ValueError(f"Not a WAV file (WAVE marker missing): {wave}")
+
+        # Parse chunks
+        channels = bits_per_sample = frame_rate = num_frames = 0
+        while True:
+            chunk_id = f.read(4)
+            if len(chunk_id) < 4:
+                break
+            chunk_size = struct.unpack("<I", f.read(4))[0]
+
+            if chunk_id == b"fmt ":
+                fmt_data = f.read(chunk_size)
+                audio_format = struct.unpack("<H", fmt_data[0:2])[0]
+                channels = struct.unpack("<H", fmt_data[2:4])[0]
+                frame_rate = struct.unpack("<I", fmt_data[4:8])[0]
+                # byte_rate = struct.unpack("<I", fmt_data[8:12])[0]
+                # block_align = struct.unpack("<H", fmt_data[12:14])[0]
+                bits_per_sample = struct.unpack("<H", fmt_data[14:16])[0]
+                if chunk_size > 16:
+                    f.read(chunk_size - 16)
+            elif chunk_id == b"data":
+                bytes_per_sample = bits_per_sample // 8 if bits_per_sample else 1
+                num_frames = chunk_size // (channels * bytes_per_sample) if channels and bits_per_sample else 0
+                break  # Found data chunk, stop
+            else:
+                f.read(chunk_size)
+
+    duration_sec = num_frames / frame_rate if frame_rate else 0
+    return {
+        "channels": channels,
+        "bits_per_sample": bits_per_sample,
+        "bytes_per_sample": bits_per_sample // 8 if bits_per_sample else 1,
+        "frame_rate": frame_rate,
+        "num_frames": num_frames,
+        "duration_sec": duration_sec,
+    }
+
+
+def _resample_wav(input_path: str, output_path: str,
+                  target_rate: int = 16000, target_channels: int = 1) -> str:
+    """Convert WAV to target sample rate and channels using pure Python.
+
+    Uses linear interpolation for sample rate conversion.
+    Works without ffmpeg for WAV files.
+    """
+    header = _read_wav_header(input_path)
+    src_rate = header["frame_rate"]
+    src_channels = header["channels"]
+    src_bits = header["bits_per_sample"]
+    src_bytes = header["bytes_per_sample"]
+
+    # Read all audio data
+    raw_data = b""
+    with open(input_path, "rb") as f:
+        # Skip RIFF header
+        f.read(12)  # "RIFF" + file_size + "WAVE"
+        # Now read chunks
+        while True:
+            chunk_id = f.read(4)
+            if len(chunk_id) < 4:
+                break
+            chunk_size_bytes = f.read(4)
+            if len(chunk_size_bytes) < 4:
+                break
+            chunk_size = struct.unpack("<I", chunk_size_bytes)[0]
+            if chunk_id == b"data":
+                raw_data = f.read(chunk_size)
+                break
+            else:
+                f.read(chunk_size)
+
+    if not raw_data:
+        raise ValueError(f"Could not find data chunk in WAV file: {input_path}")
+
+    # Decode samples
+    total_samples = len(raw_data) // src_bytes
+
+    if src_bits == 16:
+        fmt = "<" + "h" * total_samples
+        samples = list(struct.unpack(fmt, raw_data[:total_samples * 2]))
+    elif src_bits == 8:
+        samples = [((b - 128) / 128.0) * 32767 for b in raw_data]
+    elif src_bits == 32:
+        fmt = "<" + "i" * total_samples
+        samples = [s >> 16 for s in struct.unpack(fmt, raw_data[:total_samples * 4])]
+    else:
+        # Fallback: just copy as-is
+        samples = list(struct.unpack("<" + "h" * (len(raw_data) // 2), raw_data[:len(raw_data) // 2 * 2]))
+
+    # Convert to mono if stereo
+    if src_channels > 1:
+        mono_samples = []
+        for i in range(0, len(samples), src_channels):
+            frame = samples[i:i + src_channels]
+            mono_samples.append(sum(frame) // src_channels)
+        samples = mono_samples
+
+    # Resample to target_rate using linear interpolation
+    if src_rate != target_rate:
+        ratio = src_rate / target_rate
+        new_length = int(len(samples) / ratio)
+        resampled = []
+        for i in range(new_length):
+            src_pos = i * ratio
+            idx = int(src_pos)
+            frac = src_pos - idx
+            if idx + 1 < len(samples):
+                val = int(samples[idx] * (1 - frac) + samples[idx + 1] * frac)
+            else:
+                val = samples[idx] if idx < len(samples) else 0
+            resampled.append(max(-32768, min(32767, val)))
+        samples = resampled
+
+    # Write output WAV (batch write for performance)
+    num_frames = len(samples)
+    data_size = num_frames * 2  # 16-bit = 2 bytes per sample
+    # Clamp all samples to int16 range
+    clamped = [max(-32768, min(32767, s)) for s in samples]
+    audio_data = struct.pack("<" + "h" * num_frames, *clamped)
+
+    with open(output_path, "wb") as f:
+        # RIFF header
+        f.write(b"RIFF")
+        f.write(struct.pack("<I", 36 + data_size))
+        f.write(b"WAVE")
+        # fmt chunk
+        f.write(b"fmt ")
+        f.write(struct.pack("<I", 16))  # chunk size
+        f.write(struct.pack("<H", 1))   # PCM format
+        f.write(struct.pack("<H", 1))   # mono
+        f.write(struct.pack("<I", target_rate))  # sample rate
+        f.write(struct.pack("<I", target_rate * 2))  # byte rate (mono 16-bit)
+        f.write(struct.pack("<H", 2))   # block align
+        f.write(struct.pack("<H", 16))  # bits per sample
+        # data chunk
+        f.write(b"data")
+        f.write(struct.pack("<I", data_size))
+        f.write(audio_data)
+
+    return output_path
+
+
+def _chunk_wav_python(input_wav: str, chunk_minutes: int, overlap_seconds: int,
+                      output_dir: str) -> list[str]:
+    """Split a WAV file into chunks using pure Python (no ffmpeg)."""
+    header = _read_wav_header(input_wav)
+    frame_rate = header["frame_rate"]
+    channels = header["channels"]
+    bits_per_sample = header["bits_per_sample"]
+    bytes_per_sample = header["bytes_per_sample"]
+
+    chunk_sec = chunk_minutes * 60
+    overlap_sec = overlap_seconds
+    total_sec = header["duration_sec"]
+
+    if total_sec <= chunk_sec:
+        return [input_wav]
+
+    # Read all audio data
+    raw_data = b""
+    with open(input_wav, "rb") as f:
+        f.read(12)  # Skip RIFF header
+        while True:
+            chunk_id = f.read(4)
+            if len(chunk_id) < 4:
+                break
+            chunk_size_bytes = f.read(4)
+            if len(chunk_size_bytes) < 4:
+                break
+            chunk_size = struct.unpack("<I", chunk_size_bytes)[0]
+            if chunk_id == b"data":
+                raw_data = f.read(chunk_size)
+                break
+            else:
+                f.read(chunk_size)
+
+    if not raw_data:
+        raise ValueError(f"Could not find data chunk in WAV file: {input_wav}")
+
+    bytes_per_frame = channels * bytes_per_sample
+    total_frames = len(raw_data) // bytes_per_frame
+
+    chunk_frames = int(chunk_sec * frame_rate)
+    overlap_frames = int(overlap_sec * frame_rate)
+
+    chunks = []
+    start_frame = 0
+    idx = 0
+
+    while start_frame < total_frames:
+        end_frame = min(start_frame + chunk_frames, total_frames)
+        start_byte = start_frame * bytes_per_frame
+        end_byte = end_frame * bytes_per_frame
+        chunk_data = raw_data[start_byte:end_byte]
+
+        out_path = os.path.join(output_dir, f"chunk_{idx:04d}.wav")
+        data_size = len(chunk_data)
+
+        with open(out_path, "wb") as f:
+            f.write(b"RIFF")
+            f.write(struct.pack("<I", 36 + data_size))
+            f.write(b"WAVE")
+            f.write(b"fmt ")
+            f.write(struct.pack("<I", 16))
+            f.write(struct.pack("<H", 1))  # PCM
+            f.write(struct.pack("<H", channels))
+            f.write(struct.pack("<I", frame_rate))
+            f.write(struct.pack("<I", frame_rate * bytes_per_frame))
+            f.write(struct.pack("<H", bytes_per_frame))
+            f.write(struct.pack("<H", bits_per_sample))
+            f.write(b"data")
+            f.write(struct.pack("<I", data_size))
+            f.write(chunk_data)
+
+        chunks.append(out_path)
+
+        if end_frame >= total_frames:
+            break
+        start_frame = end_frame - overlap_frames
+        idx += 1
+
+    return chunks
+
+
+# ── High-level audio API (uses ffmpeg if available, pure Python fallback) ───
 
 def get_audio_duration(filepath: str) -> float:
-    """Return audio duration in minutes using ffprobe."""
-    cmd = [
-        "ffprobe", "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-        filepath
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-    if result.returncode != 0:
-        raise RuntimeError(f"ffprobe failed: {result.stderr}")
-    return float(result.stdout.strip()) / 60.0
+    """Return audio duration in minutes. Uses ffprobe if available, else WAV header."""
+    if _check_ffmpeg():
+        cmd = [
+            "ffprobe", "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            filepath
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            return float(result.stdout.strip()) / 60.0
+
+    # Fallback: read WAV header
+    header = _read_wav_header(filepath)
+    return header["duration_sec"] / 60.0
 
 
 def convert_to_wav(input_path: str, output_path: str = None) -> str:
-    """Convert any audio file to 16kHz mono 16-bit PCM WAV using ffmpeg.
+    """Convert any audio file to 16kHz mono 16-bit PCM WAV.
 
-    Args:
-        input_path: Path to source audio file.
-        output_path: Path for output WAV. If None, creates a temp file.
-
-    Returns:
-        Path to the converted WAV file.
+    Uses ffmpeg if available. Falls back to pure-Python WAV resampling
+    for WAV inputs. Non-WAV files require ffmpeg.
     """
     if output_path is None:
         fd, output_path = tempfile.mkstemp(suffix=".wav")
         os.close(fd)
 
-    cmd = [
-        "ffmpeg", "-y", "-i", input_path,
-        "-ar", "16000",       # 16kHz sample rate
-        "-ac", "1",           # mono
-        "-sample_fmt", "s16", # 16-bit PCM
-        "-f", "wav",
-        output_path
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-    if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg conversion failed: {result.stderr[-500:]}")
-    return output_path
+    if _check_ffmpeg():
+        cmd = [
+            "ffmpeg", "-y", "-i", input_path,
+            "-ar", "16000",       # 16kHz sample rate
+            "-ac", "1",           # mono
+            "-sample_fmt", "s16", # 16-bit PCM
+            "-f", "wav",
+            output_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode == 0:
+            return output_path
+        log.warning(f"ffmpeg conversion failed, trying WAV fallback: {result.stderr[-200:]}")
+
+    # Pure-Python fallback: only works for WAV files
+    try:
+        header = _read_wav_header(input_path)
+        if header["frame_rate"] == 16000 and header["channels"] == 1 and header["bits_per_sample"] == 16:
+            # Already in target format — just copy
+            shutil.copy2(input_path, output_path)
+            return output_path
+        return _resample_wav(input_path, output_path)
+    except (ValueError, struct.error) as e:
+        raise RuntimeError(
+            f"Cannot convert {input_path}: ffmpeg is not installed and the file is not a valid WAV. "
+            f"Install ffmpeg or upload a WAV file. Error: {e}"
+        )
 
 
 def chunk_audio_wav(input_wav: str, chunk_minutes: int = CHUNK_DURATION_MIN,
                     overlap_seconds: int = CHUNK_OVERLAP_SEC,
                     output_dir: str = None) -> list[str]:
-    """Split a WAV file into overlapping chunks using ffmpeg.
+    """Split a WAV file into overlapping chunks.
 
-    Args:
-        input_wav: Path to the standardized WAV file.
-        chunk_minutes: Duration of each chunk in minutes.
-        overlap_seconds: Overlap between chunks.
-        output_dir: Directory for chunk files. If None, creates temp dir.
-
-    Returns:
-        List of file paths to chunk WAV files.
+    Uses ffmpeg if available, else pure-Python WAV splitting.
     """
     if output_dir is None:
         output_dir = tempfile.mkdtemp(prefix="audio_chunks_")
 
     total_duration_min = get_audio_duration(input_wav)
     chunk_sec = chunk_minutes * 60
-    overlap_sec = overlap_seconds
     total_sec = total_duration_min * 60
 
     if total_sec <= chunk_sec:
         return [input_wav]
 
-    chunks = []
-    start = 0
-    idx = 0
-    while start < total_sec:
-        end = min(start + chunk_sec, total_sec)
-        out_path = os.path.join(output_dir, f"chunk_{idx:04d}.wav")
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", input_wav,
-            "-ss", str(start),
-            "-to", str(end),
-            "-ar", "16000", "-ac", "1", "-sample_fmt", "s16",
-            "-f", "wav", out_path
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-        if result.returncode == 0:
-            chunks.append(out_path)
-        else:
-            log.warning(f"Chunk {idx} extraction failed: {result.stderr[:200]}")
+    if _check_ffmpeg():
+        overlap_sec = overlap_seconds
+        chunks = []
+        start = 0
+        idx = 0
+        while start < total_sec:
+            end = min(start + chunk_sec, total_sec)
+            out_path = os.path.join(output_dir, f"chunk_{idx:04d}.wav")
+            cmd = [
+                "ffmpeg", "-y",
+                "-i", input_wav,
+                "-ss", str(start),
+                "-to", str(end),
+                "-ar", "16000", "-ac", "1", "-sample_fmt", "s16",
+                "-f", "wav", out_path
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode == 0:
+                chunks.append(out_path)
+            else:
+                log.warning(f"Chunk {idx} extraction failed: {result.stderr[:200]}")
 
-        if end >= total_sec:
-            break
-        start = end - overlap_sec
-        idx += 1
+            if end >= total_sec:
+                break
+            start = end - overlap_sec
+            idx += 1
+        return chunks
 
-    return chunks
+    # Fallback: pure Python
+    return _chunk_wav_python(input_wav, chunk_minutes, overlap_seconds, output_dir)
 
 
 def wav_to_base64(filepath: str) -> str:
