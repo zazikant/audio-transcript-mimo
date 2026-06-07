@@ -1,0 +1,14 @@
+*.pyc
+__pycache__/
+.env
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.webm
+*.flac
+*.json
+!package.json
+node_modules/
+.venv/
+venv/
