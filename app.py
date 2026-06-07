@@ -381,18 +381,60 @@ def wav_to_base64(filepath: str) -> str:
 
 
 def save_uploaded_file(uploaded_file, output_dir: str = None) -> str:
-    """Save a Streamlit UploadedFile to disk and return its path."""
+    """Save a Streamlit UploadedFile to disk and return its path.
+    
+    Detects the actual audio format from magic bytes and corrects the file
+    extension so ffmpeg and other tools can process it correctly.
+    st.audio_input often names files .wav even though content is WebM/Opus.
+    """
     if output_dir is None:
         output_dir = tempfile.mkdtemp(prefix="upload_")
 
-    suffix = Path(uploaded_file.name).suffix or ".wav"
-    fd, path = tempfile.mkstemp(suffix=suffix, dir=output_dir)
+    # Save with original suffix first
+    original_suffix = Path(uploaded_file.name).suffix or ".wav"
+    fd, path = tempfile.mkstemp(suffix=original_suffix, dir=output_dir)
     os.close(fd)
 
     with open(path, "wb") as f:
         f.write(uploaded_file.getvalue())
 
+    # Detect actual format and rename if the extension is wrong
+    actual_format = detect_audio_format(path)
+    expected_extensions = {
+        "wav": ".wav", "mp3": ".mp3", "ogg": ".ogg",
+        "flac": ".flac", "webm": ".webm", "m4a": ".m4a",
+    }
+
+    if actual_format in expected_extensions:
+        correct_suffix = expected_extensions[actual_format]
+        if original_suffix.lower() != correct_suffix:
+            new_path = path.rsplit(".", 1)[0] + correct_suffix
+            os.rename(path, new_path)
+            log.info(f"Corrected file extension: {original_suffix} → {correct_suffix} (detected {actual_format})")
+            return new_path
+
     return path
+
+
+def detect_audio_format(filepath: str) -> str:
+    """Detect the actual audio format by reading file magic bytes."""
+    with open(filepath, "rb") as f:
+        header = f.read(16)
+
+    if header[:4] == b"RIFF" and header[8:12] == b"WAVE":
+        return "wav"
+    elif header[:4] == b"OggS":
+        return "ogg"
+    elif header[:3] == b"ID3" or header[:2] == b"\xff\xfb" or header[:2] == b"\xff\xf3":
+        return "mp3"
+    elif header[:4] == b"fLaC":
+        return "flac"
+    elif header[:4] == b"\x1a\x45\xdf\xa5":  # WebM/Matroska
+        return "webm"
+    elif header[4:8] == b"ftyp":  # MP4/M4A
+        return "m4a"
+    else:
+        return "unknown"
 
 
 # ─── Transcription Engine ────────────────────────────────────────────────────
@@ -743,27 +785,46 @@ def main():
 
     with tab3:
         st.markdown("### Record audio from your microphone")
+        st.caption("Browser records in WebM format — the app will convert it to WAV automatically.")
         audio_value = st.audio_input(
             "Click to record",
             key="audio_record",
             help="Click the microphone button to start recording"
         )
         if audio_value:
-            # Save the raw recording
+            # Save the raw recording (browser typically outputs WebM/Opus)
             raw_audio_path = save_uploaded_file(audio_value)
-            source_label = "Recording"
+
+            # Detect the actual format of the recorded audio
+            actual_format = detect_audio_format(raw_audio_path)
+            log.info(f"Recording detected format: {actual_format}")
+
+            if actual_format == "webm" or actual_format == "ogg" or actual_format == "unknown":
+                source_label = f"Recording ({actual_format.upper()} → WAV conversion required)"
+            else:
+                source_label = f"Recording ({actual_format.upper()})"
+
             st.audio(audio_value)
 
-            # Convert to WAV for .wav download
+            # Convert to proper WAV for download — must use ffmpeg for non-WAV formats
+            recorded_wav_bytes = None
+            conversion_error = None
+
             try:
                 wav_dl_path = convert_to_wav(raw_audio_path)
-                with open(wav_dl_path, "rb") as f:
-                    recorded_wav_bytes = f.read()
-            except Exception:
-                # If conversion fails, try to use raw bytes directly
-                recorded_wav_bytes = audio_value.getvalue()
+                # Verify the output is actually a valid WAV
+                verify_fmt = detect_audio_format(wav_dl_path)
+                if verify_fmt == "wav":
+                    with open(wav_dl_path, "rb") as f:
+                        recorded_wav_bytes = f.read()
+                else:
+                    conversion_error = f"Conversion produced {verify_fmt.upper()} instead of WAV"
+                    log.error(conversion_error)
+            except Exception as e:
+                conversion_error = str(e)
+                log.error(f"WAV conversion failed: {e}")
 
-            # Provide .wav download button for recording
+            # Provide .wav download button only if conversion succeeded
             if recorded_wav_bytes:
                 st.download_button(
                     "💾 Download recording as .wav",
@@ -771,6 +832,20 @@ def main():
                     file_name="recording.wav",
                     mime="audio/wav",
                     key="download_recording_wav"
+                )
+            else:
+                # Conversion failed — provide the original format with a clear label
+                st.warning(
+                    f"⚠️ Could not convert recording to WAV ({conversion_error}). "
+                    f"The original {actual_format.upper()} file will be used for transcription "
+                    f"but may not play correctly in all players."
+                )
+                st.download_button(
+                    f"💾 Download recording as .{actual_format}",
+                    data=audio_value.getvalue(),
+                    file_name=f"recording.{actual_format}",
+                    mime=f"audio/{actual_format}",
+                    key="download_recording_raw"
                 )
 
     # ── Convert & Show Info ──────────────────────────────────────────────────
