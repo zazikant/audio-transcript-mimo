@@ -769,15 +769,16 @@ def main():
         st.markdown("### Upload an audio file")
         uploaded_file = st.file_uploader(
             "Choose an audio file",
-            type=["mp3", "wav", "m4a", "ogg", "webm", "flac", "aac"],
+            type=["audio/*"],
             key="audio_upload",
-            help="Supports MP3, WAV, M4A, OGG, WEBM, FLAC, AAC (up to 200MB)"
+            help="Supports any audio format — WAV, MP3, M4A, OGG, WEBM, FLAC, AAC (up to 200MB)"
         )
         if uploaded_file:
             raw_audio_path = save_uploaded_file(uploaded_file)
             source_label = f"Upload: {uploaded_file.name}"
-            ext = Path(uploaded_file.name).suffix.lstrip(".")
-            st.audio(uploaded_file, format=f"audio/{ext}")
+            # Detect actual format for correct playback
+            actual_fmt = detect_audio_format(raw_audio_path) if raw_audio_path else "wav"
+            st.audio(uploaded_file, format=f"audio/{actual_fmt}")
 
     with tab2:
         st.markdown("### Download audio from YouTube")
