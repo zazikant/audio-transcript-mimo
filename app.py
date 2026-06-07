@@ -290,6 +290,7 @@ def _chunk_wav_python(input_wav: str, chunk_minutes: int, overlap_seconds: int,
 
 def get_audio_duration(filepath: str) -> float:
     """Return audio duration in minutes."""
+    # Try ffprobe first
     if _check_ffmpeg():
         cmd = [
             "ffprobe", "-v", "error",
@@ -298,11 +299,33 @@ def get_audio_duration(filepath: str) -> float:
             filepath
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        if result.returncode == 0:
-            return float(result.stdout.strip()) / 60.0
+        if result.returncode == 0 and result.stdout.strip():
+            try:
+                return float(result.stdout.strip()) / 60.0
+            except ValueError:
+                log.warning(f"ffprobe returned non-numeric duration: '{result.stdout.strip()}', falling back to WAV header")
 
-    header = _read_wav_header(filepath)
-    return header["duration_sec"] / 60.0
+    # Fallback: try reading WAV header directly
+    try:
+        header = _read_wav_header(filepath)
+        if header["duration_sec"] > 0:
+            return header["duration_sec"] / 60.0
+    except (ValueError, struct.error) as e:
+        log.warning(f"Could not read WAV header for duration: {e}")
+
+    # Last resort: estimate from file size (assume 16kHz mono 16-bit = 32000 bytes/sec)
+    try:
+        file_size = os.path.getsize(filepath)
+        # For 16kHz mono 16-bit WAV: 32000 bytes per second of audio
+        # Subtract 44 bytes for WAV header
+        estimated_sec = max(0, (file_size - 44) / 32000)
+        if estimated_sec > 0:
+            log.info(f"Estimated duration from file size: {estimated_sec:.1f}s")
+            return estimated_sec / 60.0
+    except OSError:
+        pass
+
+    return 0.0
 
 
 def convert_to_wav(input_path: str, output_path: str = None) -> str:
@@ -318,10 +341,22 @@ def convert_to_wav(input_path: str, output_path: str = None) -> str:
             "-f", "wav", output_path
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if result.returncode == 0:
-            return output_path
-        log.warning(f"ffmpeg conversion failed, trying WAV fallback: {result.stderr[-200:]}")
+        if result.returncode == 0 and os.path.exists(output_path) and os.path.getsize(output_path) > 44:
+            # Verify the output is actually a valid WAV
+            try:
+                fmt = detect_audio_format(output_path)
+                if fmt == "wav":
+                    return output_path
+                else:
+                    log.warning(f"ffmpeg output is {fmt}, not WAV — trying fallback")
+            except Exception:
+                pass
+        elif result.returncode != 0:
+            log.warning(f"ffmpeg conversion failed, trying WAV fallback: {result.stderr[-200:]}")
+        else:
+            log.warning("ffmpeg produced empty output, trying WAV fallback")
 
+    # Fallback: try pure-Python WAV processing
     try:
         header = _read_wav_header(input_path)
         if header["frame_rate"] == 16000 and header["channels"] == 1 and header["bits_per_sample"] == 16:
@@ -330,8 +365,8 @@ def convert_to_wav(input_path: str, output_path: str = None) -> str:
         return _resample_wav(input_path, output_path)
     except (ValueError, struct.error) as e:
         raise RuntimeError(
-            f"Cannot convert {input_path}: ffmpeg is not installed and the file is not a valid WAV. "
-            f"Install ffmpeg or upload a WAV file. Error: {e}"
+            f"Cannot convert {input_path}: ffmpeg conversion failed and the file is not a valid WAV. "
+            f"Error: {e}"
         )
 
 
