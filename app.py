@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Audio → Transcript — MiMo V2.5 ASR
-====================================
+Audio → Transcript
+==================
 Converts audio (uploaded, recorded, or from YouTube) to transcript.txt
-using MiMo V2.5 omnimodal ASR via OpenCode Go API.
+using MiMo V2.5 (OpenCode Go API) or Groq Whisper.
 
 No pydub — uses ffmpeg directly (Python 3.13+ safe).
 """
@@ -26,11 +26,13 @@ from audio_recorder_streamlit import audio_recorder
 # ─── Configuration ────────────────────────────────────────────────────────────
 
 OPCODE_BASE_URL = "https://opencode.ai/zen/go/v1"
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 
 # Audio chunking config
 CHUNK_DURATION_MIN = int(os.environ.get("CHUNK_DURATION_MIN", "3"))
 CHUNK_OVERLAP_SEC = int(os.environ.get("CHUNK_OVERLAP_SEC", "5"))
 MAX_AUDIO_DURATION = 60  # minutes (1 hour)
+GROQ_MAX_FILE_SIZE = 25 * 1024 * 1024  # 25 MB
 
 # Output
 TRANSCRIPT_FILENAME = "transcript.txt"
@@ -39,12 +41,20 @@ logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 
-# ─── OpenCode Go Client ──────────────────────────────────────────────────────
+# ─── API Clients ──────────────────────────────────────────────────────────────
 
 def get_opencode_client(api_key: str) -> OpenAI:
     """Create an OpenAI client pointed at OpenCode Go API."""
     return OpenAI(
         base_url=OPCODE_BASE_URL,
+        api_key=api_key,
+    )
+
+
+def get_groq_client(api_key: str) -> OpenAI:
+    """Create an OpenAI client pointed at Groq API (OpenAI-compatible)."""
+    return OpenAI(
+        base_url=GROQ_BASE_URL,
         api_key=api_key,
     )
 
@@ -475,8 +485,113 @@ def detect_audio_format(filepath: str) -> str:
 
 # ─── Transcription Engine ────────────────────────────────────────────────────
 
-def transcribe_chunk(wav_path: str, api_key: str, model: str,
-                     language: str = "en", prompt_context: str = "") -> str:
+# ── Groq Whisper transcription ─────────────────────────────────────────────
+
+def transcribe_groq_chunk(audio_path: str, api_key: str, model: str = "whisper-large-v3",
+                           language: str = "en") -> str:
+    """Transcribe a single audio chunk using Groq Whisper API.
+    
+    Groq accepts files up to 25MB. For WAV, that's ~13 min at 16kHz mono.
+    For longer audio, convert to MP3 first to stay under 25MB.
+    """
+    client = get_groq_client(api_key)
+
+    # Groq has a 25MB file limit — convert to MP3 if WAV is too large
+    file_to_send = audio_path
+    temp_mp3 = None
+    if os.path.getsize(audio_path) > GROQ_MAX_FILE_SIZE:
+        if _check_ffmpeg():
+            fd, temp_mp3 = tempfile.mkstemp(suffix=".mp3")
+            os.close(fd)
+            cmd = [
+                "ffmpeg", "-y", "-i", audio_path,
+                "-ar", "16000", "-ac", "1", "-b:a", "64k",
+                temp_mp3
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode == 0:
+                file_to_send = temp_mp3
+                log.info(f"Converted WAV to MP3 for Groq: {os.path.getsize(temp_mp3)} bytes")
+            else:
+                log.warning(f"MP3 conversion failed: {result.stderr[-200:]}")
+
+    try:
+        with open(file_to_send, "rb") as audio_file:
+            kwargs = {
+                "model": model,
+                "file": audio_file,
+                "response_format": "text",
+                "temperature": 0.0,
+            }
+            # Only pass language if not 'auto'
+            if language and language != "auto":
+                kwargs["language"] = language
+
+            response = client.audio.transcriptions.create(**kwargs)
+            return response.strip() if response else ""
+    except Exception as e:
+        error_str = str(e)
+        log.error(f"Groq transcription error: {e}")
+        if "429" in error_str:
+            return "[TRANSCRIPTION_ERROR: Groq rate limit hit. Please wait a moment and try again.]"
+        if "401" in error_str:
+            return "[TRANSCRIPTION_ERROR: Invalid Groq API key. Please check your key in the sidebar.]"
+        return f"[TRANSCRIPTION_ERROR: Groq API error: {e}]"
+    finally:
+        if temp_mp3 and os.path.exists(temp_mp3):
+            os.unlink(temp_mp3)
+
+
+def transcribe_groq_audio(wav_path: str, api_key: str, model: str = "whisper-large-v3",
+                          language: str = "en", progress_callback=None) -> str:
+    """Transcribe audio using Groq Whisper. Handles chunking for long audio."""
+    duration_min = get_audio_duration(wav_path)
+    file_size = os.path.getsize(wav_path)
+    log.info(f"Groq transcription: {duration_min:.1f} min, {file_size/(1024*1024):.1f} MB")
+
+    # Groq handles up to 25MB per request
+    # 16kHz mono 16-bit WAV: ~1.9 MB/min → ~13 min fits in 25MB
+    # If file is small enough, send directly
+    if file_size <= GROQ_MAX_FILE_SIZE and duration_min <= 13:
+        if progress_callback:
+            progress_callback(0.1, "Transcribing with Groq Whisper...")
+        transcript = transcribe_groq_chunk(wav_path, api_key=api_key, model=model, language=language)
+        if progress_callback:
+            progress_callback(1.0, "Done!")
+        return transcript
+
+    # Long audio: chunk and transcribe each chunk
+    chunk_min = 10  # 10 min chunks stay well under 25MB
+    chunks = chunk_audio_wav(wav_path, chunk_minutes=chunk_min)
+    log.info(f"Split into {len(chunks)} chunks of ~{chunk_min} min for Groq")
+
+    transcript_parts = []
+    for i, chunk_path in enumerate(chunks):
+        progress = (i + 1) / len(chunks)
+        msg = f"Transcribing chunk {i+1}/{len(chunks)} with Groq Whisper..."
+        if progress_callback:
+            progress_callback(progress * 0.9, msg)
+
+        part = transcribe_groq_chunk(chunk_path, api_key=api_key, model=model, language=language)
+        if part and not part.startswith("[TRANSCRIPTION_ERROR"):
+            transcript_parts.append(part)
+        elif part.startswith("[TRANSCRIPTION_ERROR"):
+            transcript_parts.append(part)
+            break  # Stop on error
+
+        if i < len(chunks) - 1:
+            time.sleep(0.5)  # Small delay to avoid rate limits
+
+    full_transcript = "\n\n".join(transcript_parts)
+    if progress_callback:
+        progress_callback(1.0, "Transcription complete!")
+    return full_transcript
+
+
+# ── MiMo V2.5 transcription (OpenCode Go API) ─────────────────────────────
+
+def transcribe_mimo_chunk(wav_path: str, api_key: str,
+                          language: str = "en", prompt_context: str = "") -> str:
     """Transcribe a single audio chunk using MiMo V2.5 via OpenCode Go API."""
     client = get_opencode_client(api_key)
 
@@ -508,7 +623,7 @@ def transcribe_chunk(wav_path: str, api_key: str, model: str,
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
-                model=model,
+                model="mimo-v2.5",
                 messages=[
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": user_parts},
@@ -557,28 +672,23 @@ def transcribe_chunk(wav_path: str, api_key: str, model: str,
 
         except Exception as e:
             error_str = str(e)
-            log.error(f"Transcription API error (attempt {attempt+1}): {e}")
-            if "image input" in error_str.lower() or "no endpoints found" in error_str.lower():
-                return (
-                    "[TRANSCRIPTION_ERROR: The selected model does not support audio input. "
-                    "Please switch to 'mimo-v2-omni' in the sidebar Settings.]"
-                )
+            log.error(f"MiMo transcription error (attempt {attempt+1}): {e}")
             if attempt < max_retries - 1:
                 time.sleep(3 * (attempt + 1))
             else:
                 return f"[TRANSCRIPTION_ERROR: {e}]"
 
 
-def transcribe_audio(wav_path: str, api_key: str, model: str,
-                     language: str = "en", progress_callback=None) -> str:
-    """Transcribe a full audio file (handles chunking for long audio)."""
+def transcribe_mimo_audio(wav_path: str, api_key: str,
+                          language: str = "en", progress_callback=None) -> str:
+    """Transcribe a full audio file using MiMo V2.5 (handles chunking for long audio)."""
     duration_min = get_audio_duration(wav_path)
-    log.info(f"Transcribing audio: {duration_min:.1f} minutes")
+    log.info(f"MiMo transcription: {duration_min:.1f} minutes")
 
     if duration_min <= 5:
         if progress_callback:
-            progress_callback(0.1, "Transcribing audio...")
-        transcript = transcribe_chunk(wav_path, api_key=api_key, model=model, language=language)
+            progress_callback(0.1, "Transcribing with MiMo V2.5...")
+        transcript = transcribe_mimo_chunk(wav_path, api_key=api_key, language=language)
         if progress_callback:
             progress_callback(1.0, "Done!")
         return transcript
@@ -597,13 +707,13 @@ def transcribe_audio(wav_path: str, api_key: str, model: str,
     transcript_parts = []
     for i, chunk_path in enumerate(chunks):
         progress = (i + 1) / len(chunks)
-        msg = f"Transcribing chunk {i+1}/{len(chunks)}..."
+        msg = f"Transcribing chunk {i+1}/{len(chunks)} with MiMo V2.5..."
         if progress_callback:
             progress_callback(progress * 0.9, msg)
 
         context = " ".join(transcript_parts[-2:]) if transcript_parts else ""
-        part = transcribe_chunk(chunk_path, api_key=api_key, model=model,
-                                language=language, prompt_context=context)
+        part = transcribe_mimo_chunk(chunk_path, api_key=api_key,
+                                     language=language, prompt_context=context)
 
         if part and part != "[non-speech]":
             transcript_parts.append(part)
@@ -612,11 +722,24 @@ def transcribe_audio(wav_path: str, api_key: str, model: str,
             time.sleep(1)
 
     full_transcript = merge_transcript_parts(transcript_parts)
-
     if progress_callback:
         progress_callback(1.0, "Transcription complete!")
-
     return full_transcript
+
+
+# ── Unified transcription dispatcher ──────────────────────────────────────
+
+def transcribe_audio(wav_path: str, engine: str, api_key: str,
+                     model: str = None, language: str = "en",
+                     progress_callback=None) -> str:
+    """Transcribe audio using the selected engine (groq or mimo)."""
+    if engine == "groq":
+        model = model or "whisper-large-v3"
+        return transcribe_groq_audio(wav_path, api_key=api_key, model=model,
+                                     language=language, progress_callback=progress_callback)
+    else:  # mimo
+        return transcribe_mimo_audio(wav_path, api_key=api_key, language=language,
+                                     progress_callback=progress_callback)
 
 
 def merge_transcript_parts(parts: list[str]) -> str:
@@ -700,60 +823,116 @@ def download_youtube_audio(url: str, cookies_path: str = None) -> tuple[str, str
 
 # ─── Streamlit UI ────────────────────────────────────────────────────────────
 
+def _init_session_state():
+    """Initialize session state defaults for persistent API keys."""
+    defaults = {
+        "transcript": "",
+        "opencode_api_key": "",
+        "groq_api_key": "",
+        "engine": "groq",
+        "groq_model": "whisper-large-v3",
+        "language": "auto",
+    }
+    for key, default in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = default
+
+
 def main():
     st.set_page_config(
-        page_title="Audio → Transcript | MiMo V2.5 ASR",
+        page_title="Audio → Transcript",
         page_icon="🎙️",
         layout="wide",
         initial_sidebar_state="expanded",
     )
 
-    if "transcript" not in st.session_state:
-        st.session_state.transcript = ""
+    _init_session_state()
 
     # ── Sidebar ──────────────────────────────────────────────────────────────
     with st.sidebar:
         st.title("⚙️ Settings")
 
-        st.markdown("### 🔑 API Key")
-        api_key = st.text_input(
+        # ── Transcription Engine ─────────────────────────────────────────────
+        st.markdown("### 🔧 Transcription Engine")
+        engine = st.selectbox(
+            "Engine",
+            options=["groq", "mimo"],
+            format_func=lambda x: "🟢 Groq Whisper (fast, recommended)" if x == "groq" else "🔵 MiMo V2.5 (OpenCode)",
+            index=0 if st.session_state.engine == "groq" else 1,
+            help="Groq Whisper: Purpose-built ASR, 30-50× realtime, free tier. MiMo V2.5: General multimodal LLM."
+        )
+        st.session_state.engine = engine
+
+        # ── Groq Settings ────────────────────────────────────────────────────
+        st.markdown("### 🟢 Groq API Key")
+        groq_key = st.text_input(
+            "Groq API Key",
+            value=st.session_state.groq_api_key,
+            type="password",
+            placeholder="gsk_...",
+            help="Get your key at console.groq.com",
+            key="groq_key_input"
+        )
+        st.session_state.groq_api_key = groq_key
+
+        if engine == "groq":
+            groq_model = st.selectbox(
+                "Groq Model",
+                options=["whisper-large-v3", "whisper-large-v3-turbo"],
+                index=0,
+                help="whisper-large-v3: Best accuracy. whisper-large-v3-turbo: Faster, slightly less accurate."
+            )
+            st.session_state.groq_model = groq_model
+
+        # ── MiMo Settings ────────────────────────────────────────────────────
+        st.markdown("### 🔵 OpenCode API Key (MiMo)")
+        opencode_key = st.text_input(
             "OpenCode API Key",
-            value="",
+            value=st.session_state.opencode_api_key,
             type="password",
             placeholder="sk-...",
-            help="Enter your OpenCode Go API key. Get one at opencode.ai"
+            help="Enter your OpenCode Go API key. Get one at opencode.ai",
+            key="opencode_key_input"
         )
+        st.session_state.opencode_api_key = opencode_key
 
-        model_choice = st.selectbox(
-            "Model",
-            options=["mimo-v2-omni", "mimo-v2.5"],
-            index=0,
-            help="mimo-v2-omni: Best for audio (recommended). mimo-v2.5: Also supports audio."
-        )
-
+        # ── Language ─────────────────────────────────────────────────────────
+        st.markdown("### 🌐 Language")
         language = st.selectbox(
             "Language",
             options=["auto", "en", "zh", "es", "fr", "de", "ja", "ko", "hi", "ar", "pt", "ru"],
             index=0,
             help="Language hint for transcription. 'auto' lets the model detect."
         )
+        st.session_state.language = language
 
         st.markdown("---")
         st.markdown("""
         <small>
-        Powered by <b>MiMo V2.5</b> via OpenCode Go API<br/>
+        <b>🟢 Groq Whisper</b>: Purpose-built ASR, 30-50× realtime, free tier available<br/>
+        <b>🔵 MiMo V2.5</b>: Multimodal LLM via OpenCode Go API<br/>
         Handles audio up to 1 hour with intelligent chunking<br/>
-        Supports: MP3, WAV, M4A, OGG, WEBM, FLAC
+        Supports: WAV, MP3, M4A, OGG, WEBM, FLAC
         </small>
         """, unsafe_allow_html=True)
 
+    # ── Determine active API key ─────────────────────────────────────────────
+    if engine == "groq":
+        api_key = groq_key
+        engine_label = "Groq Whisper"
+        model_label = st.session_state.get("groq_model", "whisper-large-v3")
+    else:
+        api_key = opencode_key
+        engine_label = "MiMo V2.5"
+        model_label = "mimo-v2.5"
+
     # ── Main Area ────────────────────────────────────────────────────────────
     st.title("🎙️ Audio → Transcript")
-    st.caption("Convert audio to text — powered by MiMo V2.5 ASR")
+    st.caption(f"Convert audio to text — using {engine_label}")
 
     # Warn if no API key
     if not api_key:
-        st.warning("🔑 Please enter your OpenCode API key in the sidebar to continue.")
+        st.warning(f"🔑 Please enter your {engine_label} API key in the sidebar to continue.")
         st.stop()
 
     # ── Step 1: Audio Input ──────────────────────────────────────────────────
@@ -917,8 +1096,9 @@ def main():
             try:
                 transcript = transcribe_audio(
                     wav_path,
+                    engine=engine,
                     api_key=api_key,
-                    model=model_choice,
+                    model=model_label,
                     language=language,
                     progress_callback=progress_callback
                 )
@@ -961,7 +1141,8 @@ def main():
                     "source": source_label,
                     "duration_minutes": round(duration_min, 2),
                     "language": language,
-                    "model": model_choice,
+                    "engine": engine,
+                    "model": model_label,
                     "transcript": edited_transcript,
                     "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
                 }, indent=2, ensure_ascii=False),
