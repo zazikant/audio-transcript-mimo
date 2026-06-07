@@ -820,19 +820,26 @@ def main():
 
     with tab3:
         st.markdown("### Record audio from your microphone")
-        st.caption("Click the microphone to start/stop recording. Audio is captured in WAV format.")
+        st.caption(
+            "**How to use:** Click the mic icon to START recording (it turns red). "
+            "Speak, then click again to STOP. The recording will appear below."
+        )
+        # energy_threshold=(-1.0, 1.0) disables voice-activity auto-stop
+        # so recording only stops when user clicks again (avoids first-click bug)
+        # sample_rate=16000 records at 16kHz directly (matches ASR requirements)
         wav_bytes = audio_recorder(
-            text="Click to record",
+            text="",
+            energy_threshold=(-1.0, 1.0),
+            pause_threshold=600.0,  # 10 min max — won't auto-stop
             icon_name="microphone",
             icon_size="2x",
-            pause_threshold=5.0,
+            sample_rate=16000,
             key="audio_recorder"
         )
-        if wav_bytes:
-            # audio_recorder returns real WAV bytes directly — no conversion needed
-            source_label = "Recording (WAV)"
+        if wav_bytes and len(wav_bytes) > 44:  # More than just a WAV header
+            source_label = "Recording (WAV 16kHz)"
 
-            # Save WAV bytes to a temp file for processing
+            # Save raw WAV bytes to a temp file
             fd, recording_path = tempfile.mkstemp(suffix=".wav")
             os.close(fd)
             with open(recording_path, "wb") as f:
@@ -842,14 +849,31 @@ def main():
             # Play back the recording
             st.audio(wav_bytes, format="audio/wav")
 
-            # Download button — these are real WAV bytes, no conversion needed
-            st.download_button(
-                "💾 Download recording as .wav",
-                data=wav_bytes,
-                file_name="recording.wav",
-                mime="audio/wav",
-                key="download_recording_wav"
-            )
+            # Convert to mono 16kHz WAV for a clean download
+            # (audio_recorder produces stereo; convert_to_wav makes mono)
+            try:
+                converted_wav_path = convert_to_wav(recording_path)
+                with open(converted_wav_path, "rb") as f:
+                    download_wav_bytes = f.read()
+                st.download_button(
+                    "💾 Download recording as .wav (16kHz mono)",
+                    data=download_wav_bytes,
+                    file_name="recording.wav",
+                    mime="audio/wav",
+                    key="download_recording_wav"
+                )
+            except Exception as e:
+                # Fallback: offer original bytes
+                log.warning(f"WAV conversion for download failed: {e}")
+                st.download_button(
+                    "💾 Download recording as .wav (original)",
+                    data=wav_bytes,
+                    file_name="recording.wav",
+                    mime="audio/wav",
+                    key="download_recording_wav"
+                )
+        elif wav_bytes:
+            st.warning("⚠️ Recording too short — please try again and speak longer before clicking stop.")
 
     # ── Convert & Show Info ──────────────────────────────────────────────────
     st.markdown("---")
