@@ -1,11 +1,16 @@
-#!/usr/bin/env python3
 """
-Audio → Transcript — MiMo V2.5 ASR
-====================================
-Converts audio (uploaded, recorded, or from YouTube) to transcript.txt
-using MiMo V2.5 omnimodal ASR via OpenCode Go API.
+Audio → Transcript — MiMo V2.5 / Groq Whisper
+===============================================
+Converts audio (uploaded, recorded, or from YouTube) to transcript
+using MiMo V2.5 ASR (via OpenCode Go API) or Groq Whisper.
 
-No pydub — uses ffmpeg directly (Python 3.13+ safe).
+Pipeline:
+  1. Audio input (upload / YouTube / record)
+  2. Convert to 16 kHz mono WAV (ffmpeg or pure-Python fallback)
+  3. Transcribe via selected provider (MiMo V2.5 or Groq Whisper)
+  4. Display editable transcript with download / copy
+
+API keys persist in URL query params so they survive page reload.
 """
 
 import os
@@ -17,14 +22,20 @@ import tempfile
 import logging
 import struct
 import subprocess
+import html as html_mod
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 from openai import OpenAI
+
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
 OPCODE_BASE_URL = "https://opencode.ai/zen/go/v1"
+MIMO_MODEL = "mimo-v2.5"
+GROQ_BASE_URL = "https://api.groq.com/openai/v1"
+GROQ_WHISPER_MODEL = "whisper-large-v3"
 
 # Audio chunking config
 CHUNK_DURATION_MIN = int(os.environ.get("CHUNK_DURATION_MIN", "3"))
@@ -34,23 +45,133 @@ MAX_AUDIO_DURATION = 60  # minutes (1 hour)
 # Output
 TRANSCRIPT_FILENAME = "transcript.txt"
 
+# Large-doc thresholds (borrowed from PDF-to-MD pattern)
+LARGE_DOC_CHARS = 50_000
+TRUNCATE_PREVIEW_CHARS = 5_000
+PREVIEW_HEIGHT_PX = 480
+
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
 
-# ─── OpenCode Go Client ──────────────────────────────────────────────────────
+# ─── Clipboard Helper (from PDF-to-MD pattern) ───────────────────────────────
+
+def copy_button(text: str, label: str = "Copy to Clipboard", key_suffix: str = ""):
+    """Clipboard copy that works for arbitrarily large outputs (32k+).
+
+    Key technique: the full text is written into a hidden <textarea> via
+    html.escape() at render time. The JS reads from that DOM node — not a JS
+    string literal — so there is no browser template-literal size cap or
+    Streamlit iframe serialization truncation regardless of output length.
+
+    Falls back from navigator.clipboard.writeText() to
+    document.execCommand('copy') for older browsers.
+    """
+    encoded = html_mod.escape(text, quote=True)
+    uid = abs(hash(text + key_suffix)) % 1_000_000
+    btn_id = f"copy-btn-{uid}"
+    ta_id = f"copy-ta-{uid}"
+
+    components.html(
+        f"""
+        <textarea id="{ta_id}"
+            style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;"
+        >{encoded}</textarea>
+        <button id="{btn_id}"
+            style="background:#1f77b4;color:white;border:none;padding:10px 20px;
+                   border-radius:6px;font-size:14px;cursor:pointer;width:100%;margin-top:4px;">
+            {label}
+        </button>
+        <script>
+        (function() {{
+            var btn = document.getElementById('{btn_id}');
+            var ta  = document.getElementById('{ta_id}');
+            btn.addEventListener('click', function() {{
+                var txt = ta.value;
+                function markDone() {{
+                    btn.innerText = 'Copied!';
+                    btn.style.background = '#2d6a2d';
+                    setTimeout(function() {{
+                        btn.innerText = '{label}';
+                        btn.style.background = '#1f77b4';
+                    }}, 2000);
+                }}
+                if (navigator.clipboard && navigator.clipboard.writeText) {{
+                    navigator.clipboard.writeText(txt).then(markDone).catch(function() {{
+                        ta.style.cssText = 'position:static;width:100%;height:2px;';
+                        ta.select();
+                        document.execCommand('copy');
+                        ta.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;';
+                        markDone();
+                    }});
+                }} else {{
+                    ta.style.cssText = 'position:static;width:100%;height:2px;';
+                    ta.select();
+                    document.execCommand('copy');
+                    ta.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;';
+                    markDone();
+                }}
+            }});
+        }})();
+        </script>
+        """,
+        height=60,
+    )
+
+
+# ─── Scrollable Preview Container (from PDF-to-MD pattern) ───────────────────
+
+def safe_transcript_display(text: str, view_mode: str = "Rendered"):
+    """Display transcript output inside a fixed-height scrollable container.
+
+    The container has its own scrollbar so the page doesn't grow endlessly.
+    Download / copy buttons live OUTSIDE this container so they are always
+    visible without scrolling.
+
+    For very large transcripts (> LARGE_DOC_CHARS), rendered view is truncated
+    to avoid rendering 100k+ DOM nodes inside the container.
+    """
+    char_count = len(text)
+    is_large = char_count > LARGE_DOC_CHARS
+
+    with st.container(height=PREVIEW_HEIGHT_PX):
+        if is_large:
+            st.warning(
+                f"Large transcript ({char_count:,} chars). "
+                "Preview truncated for performance. Use Download or Copy for full output."
+            )
+
+        if view_mode == "Rendered":
+            if is_large:
+                preview = text[:TRUNCATE_PREVIEW_CHARS]
+                st.markdown(
+                    f"{preview}\n\n> ... *(truncated — {char_count - TRUNCATE_PREVIEW_CHARS:,} more chars)*"
+                )
+            else:
+                st.markdown(text)
+        else:  # Raw text view
+            st.code(text, language="text")
+
+
+# ─── API Clients ──────────────────────────────────────────────────────────────
 
 def get_opencode_client(api_key: str) -> OpenAI:
-    """Create an OpenAI client pointed at OpenCode Go API."""
+    """Create an OpenAI client pointed at OpenCode Go API (MiMo V2.5)."""
     return OpenAI(
         base_url=OPCODE_BASE_URL,
         api_key=api_key,
     )
 
 
-# ─── Audio Utilities (pydub-free, Python 3.13+ safe) ────────────────────────
-# Uses ffmpeg when available, falls back to pure-Python WAV processing
+def get_groq_client(api_key: str) -> OpenAI:
+    """Create an OpenAI client pointed at Groq API (Whisper)."""
+    return OpenAI(
+        base_url=GROQ_BASE_URL,
+        api_key=api_key,
+    )
 
+
+# ─── Audio Utilities (pydub-free, Python 3.13+ safe) ────────────────────────
 
 def _ffmpeg_available() -> bool:
     """Check if ffmpeg/ffprobe are available on the system."""
@@ -297,8 +418,11 @@ def get_audio_duration(filepath: str) -> float:
             filepath
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        if result.returncode == 0:
-            return float(result.stdout.strip()) / 60.0
+        if result.returncode == 0 and result.stdout.strip() and result.stdout.strip() != "N/A":
+            try:
+                return float(result.stdout.strip()) / 60.0
+            except ValueError:
+                pass
 
     header = _read_wav_header(filepath)
     return header["duration_sec"] / 60.0
@@ -382,15 +506,13 @@ def wav_to_base64(filepath: str) -> str:
 
 def save_uploaded_file(uploaded_file, output_dir: str = None) -> str:
     """Save a Streamlit UploadedFile to disk and return its path.
-    
+
     Detects the actual audio format from magic bytes and corrects the file
     extension so ffmpeg and other tools can process it correctly.
-    st.audio_input often names files .wav even though content is WebM/Opus.
     """
     if output_dir is None:
         output_dir = tempfile.mkdtemp(prefix="upload_")
 
-    # Save with original suffix first
     original_suffix = Path(uploaded_file.name).suffix or ".wav"
     fd, path = tempfile.mkstemp(suffix=original_suffix, dir=output_dir)
     os.close(fd)
@@ -398,7 +520,6 @@ def save_uploaded_file(uploaded_file, output_dir: str = None) -> str:
     with open(path, "wb") as f:
         f.write(uploaded_file.getvalue())
 
-    # Detect actual format and rename if the extension is wrong
     actual_format = detect_audio_format(path)
     expected_extensions = {
         "wav": ".wav", "mp3": ".mp3", "ogg": ".ogg",
@@ -429,18 +550,18 @@ def detect_audio_format(filepath: str) -> str:
         return "mp3"
     elif header[:4] == b"fLaC":
         return "flac"
-    elif header[:4] == b"\x1a\x45\xdf\xa5":  # WebM/Matroska
+    elif header[:4] == b"\x1a\x45\xdf\xa5":
         return "webm"
-    elif header[4:8] == b"ftyp":  # MP4/M4A
+    elif header[4:8] == b"ftyp":
         return "m4a"
     else:
         return "unknown"
 
 
-# ─── Transcription Engine ────────────────────────────────────────────────────
+# ─── Transcription: MiMo V2.5 ───────────────────────────────────────────────
 
-def transcribe_chunk(wav_path: str, api_key: str, model: str,
-                     language: str = "en", prompt_context: str = "") -> str:
+def transcribe_chunk_mimo(wav_path: str, api_key: str,
+                          language: str = "en", prompt_context: str = "") -> str:
     """Transcribe a single audio chunk using MiMo V2.5 via OpenCode Go API."""
     client = get_opencode_client(api_key)
 
@@ -472,7 +593,7 @@ def transcribe_chunk(wav_path: str, api_key: str, model: str,
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
-                model=model,
+                model=MIMO_MODEL,
                 messages=[
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": user_parts},
@@ -521,28 +642,72 @@ def transcribe_chunk(wav_path: str, api_key: str, model: str,
 
         except Exception as e:
             error_str = str(e)
-            log.error(f"Transcription API error (attempt {attempt+1}): {e}")
+            log.error(f"MiMo API error (attempt {attempt+1}): {e}")
             if "image input" in error_str.lower() or "no endpoints found" in error_str.lower():
-                return (
-                    "[TRANSCRIPTION_ERROR: The selected model does not support audio input. "
-                    "Please switch to 'mimo-v2-omni' in the sidebar Settings.]"
-                )
+                return "[TRANSCRIPTION_ERROR: MiMo V2.5 does not support audio input on this endpoint.]"
             if attempt < max_retries - 1:
                 time.sleep(3 * (attempt + 1))
             else:
                 return f"[TRANSCRIPTION_ERROR: {e}]"
 
 
-def transcribe_audio(wav_path: str, api_key: str, model: str,
+# ─── Transcription: Groq Whisper ─────────────────────────────────────────────
+
+def transcribe_chunk_groq(wav_path: str, api_key: str,
+                          language: str = "en", prompt_context: str = "") -> str:
+    """Transcribe a single audio chunk using Groq Whisper API."""
+    client = get_groq_client(api_key)
+
+    with open(wav_path, "rb") as audio_file:
+        kwargs = {
+            "model": GROQ_WHISPER_MODEL,
+            "file": audio_file,
+            "response_format": "text",
+        }
+        # Only pass language if it's not "auto"
+        if language and language != "auto":
+            kwargs["language"] = language
+        # prompt_context gives Whisper continuity between chunks
+        if prompt_context:
+            kwargs["prompt"] = prompt_context[-500:]
+
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                transcript = client.audio.transcriptions.create(**kwargs)
+                result = transcript.strip() if isinstance(transcript, str) else str(transcript).strip()
+                if not result:
+                    if attempt < max_retries - 1:
+                        log.warning(f"Empty Groq response, retry {attempt+1}/{max_retries}")
+                        time.sleep(2 * (attempt + 1))
+                        continue
+                    return "[TRANSCRIPTION_ERROR: Empty response from Groq API]"
+                return result
+            except Exception as e:
+                error_str = str(e)
+                log.error(f"Groq API error (attempt {attempt+1}): {e}")
+                if "invalid api key" in error_str.lower() or "auth" in error_str.lower():
+                    return "[TRANSCRIPTION_ERROR: Invalid Groq API key. Check your key in the sidebar.]"
+                if attempt < max_retries - 1:
+                    time.sleep(3 * (attempt + 1))
+                else:
+                    return f"[TRANSCRIPTION_ERROR: {e}]"
+
+
+# ─── Unified Transcription (auto-chunking) ───────────────────────────────────
+
+def transcribe_audio(wav_path: str, provider: str, api_key: str,
                      language: str = "en", progress_callback=None) -> str:
     """Transcribe a full audio file (handles chunking for long audio)."""
     duration_min = get_audio_duration(wav_path)
-    log.info(f"Transcribing audio: {duration_min:.1f} minutes")
+    log.info(f"Transcribing audio: {duration_min:.1f} minutes via {provider}")
+
+    transcribe_fn = transcribe_chunk_groq if provider == "groq" else transcribe_chunk_mimo
 
     if duration_min <= 5:
         if progress_callback:
             progress_callback(0.1, "Transcribing audio...")
-        transcript = transcribe_chunk(wav_path, api_key=api_key, model=model, language=language)
+        transcript = transcribe_fn(wav_path, api_key=api_key, language=language)
         if progress_callback:
             progress_callback(1.0, "Done!")
         return transcript
@@ -566,8 +731,8 @@ def transcribe_audio(wav_path: str, api_key: str, model: str,
             progress_callback(progress * 0.9, msg)
 
         context = " ".join(transcript_parts[-2:]) if transcript_parts else ""
-        part = transcribe_chunk(chunk_path, api_key=api_key, model=model,
-                                language=language, prompt_context=context)
+        part = transcribe_fn(chunk_path, api_key=api_key,
+                             language=language, prompt_context=context)
 
         if part and part != "[non-speech]":
             transcript_parts.append(part)
@@ -666,7 +831,7 @@ def download_youtube_audio(url: str, cookies_path: str = None) -> tuple[str, str
 
 def main():
     st.set_page_config(
-        page_title="Audio → Transcript | MiMo V2.5 ASR",
+        page_title="Audio → Transcript | MiMo V2.5 / Groq Whisper",
         page_icon="🎙️",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -679,21 +844,55 @@ def main():
     with st.sidebar:
         st.title("⚙️ Settings")
 
-        st.markdown("### 🔑 API Key")
-        api_key = st.text_input(
-            "OpenCode API Key",
-            value="",
-            type="password",
-            placeholder="sk-...",
-            help="Enter your OpenCode Go API key. Get one at opencode.ai"
+        # ── Provider selection ────────────────────────────────────────────────
+        provider = st.radio(
+            "Transcription Provider",
+            options=["mimo", "groq"],
+            format_func=lambda x: "🤖 MiMo V2.5 (OpenCode)" if x == "mimo" else "⚡ Groq Whisper",
+            help="MiMo V2.5: Omnimodal ASR via OpenCode Go API. Groq: Fast Whisper-based transcription."
         )
 
-        model_choice = st.selectbox(
-            "Model",
-            options=["mimo-v2-omni", "mimo-v2.5"],
-            index=0,
-            help="mimo-v2-omni: Best for audio (recommended). mimo-v2.5: Also supports audio."
-        )
+        st.markdown("---")
+
+        # ── API Keys (persisted via query params) ────────────────────────────
+        # Read persisted keys from URL query params
+        params = st.query_params
+
+        if provider == "mimo":
+            saved_mimo_key = params.get("mimo_key", "")
+            api_key = st.text_input(
+                "OpenCode API Key",
+                value=saved_mimo_key,
+                type="password",
+                placeholder="sk-... (from opencode.ai/go)",
+                help="Enter your OpenCode Go API key. Get one at opencode.ai/go"
+            )
+            # Persist key to URL params so it survives page reload
+            if api_key:
+                st.query_params["mimo_key"] = api_key
+            elif "mimo_key" in st.query_params:
+                del st.query_params["mimo_key"]
+
+            groq_key = params.get("groq_key", "")
+
+        else:  # groq
+            saved_groq_key = params.get("groq_key", "")
+            api_key = st.text_input(
+                "Groq API Key",
+                value=saved_groq_key,
+                type="password",
+                placeholder="gsk_... (from console.groq.com)",
+                help="Enter your Groq API key. Get one at console.groq.com"
+            )
+            # Persist key to URL params so it survives page reload
+            if api_key:
+                st.query_params["groq_key"] = api_key
+            elif "groq_key" in st.query_params:
+                del st.query_params["groq_key"]
+
+            mimo_key = params.get("mimo_key", "")
+
+        st.markdown("---")
 
         language = st.selectbox(
             "Language",
@@ -705,7 +904,8 @@ def main():
         st.markdown("---")
         st.markdown("""
         <small>
-        Powered by <b>MiMo V2.5</b> via OpenCode Go API<br/>
+        <b>MiMo V2.5</b>: Omnimodal ASR (OpenCode Go API)<br/>
+        <b>Groq Whisper</b>: Fast Whisper-large-v3 transcription<br/>
         Handles audio up to 1 hour with intelligent chunking<br/>
         Supports: MP3, WAV, M4A, OGG, WEBM, FLAC
         </small>
@@ -713,144 +913,138 @@ def main():
 
     # ── Main Area ────────────────────────────────────────────────────────────
     st.title("🎙️ Audio → Transcript")
-    st.caption("Convert audio to text — powered by MiMo V2.5 ASR")
+    provider_label = "MiMo V2.5" if provider == "mimo" else "Groq Whisper"
+    st.caption(f"Convert audio to text — powered by {provider_label}")
 
     # Warn if no API key
     if not api_key:
-        st.warning("🔑 Please enter your OpenCode API key in the sidebar to continue.")
+        key_name = "OpenCode" if provider == "mimo" else "Groq"
+        st.warning(f"🔑 Please enter your {key_name} API key in the sidebar to continue.")
         st.stop()
 
-    # ── Step 1: Audio Input ──────────────────────────────────────────────────
-    st.markdown("## 🎤 Audio Input")
+    # ── Two-column layout (matching PDF-to-MD pattern) ──────────────────────
+    col_input, col_output = st.columns([1, 1.3])
 
-    tab1, tab2, tab3 = st.tabs(["📁 Upload Audio", "🎥 YouTube URL", "🎙️ Record Audio"])
+    with col_input:
+        st.subheader("🎤 Audio Input")
 
-    wav_path = None
-    source_label = ""
-    raw_audio_path = None
-    recorded_wav_bytes = None  # For .wav download of recording
+        tab1, tab2, tab3 = st.tabs(["📁 Upload", "🎥 YouTube", "🎙️ Record"])
 
-    with tab1:
-        st.markdown("### Upload an audio file")
-        uploaded_file = st.file_uploader(
-            "Choose an audio file",
-            type=["mp3", "wav", "m4a", "ogg", "webm", "flac", "aac"],
-            key="audio_upload",
-            help="Supports MP3, WAV, M4A, OGG, WEBM, FLAC, AAC (up to 200MB)"
-        )
-        if uploaded_file:
-            raw_audio_path = save_uploaded_file(uploaded_file)
-            source_label = f"Upload: {uploaded_file.name}"
-            ext = Path(uploaded_file.name).suffix.lstrip(".")
-            st.audio(uploaded_file, format=f"audio/{ext}")
+        wav_path = None
+        source_label = ""
+        raw_audio_path = None
+        recorded_wav_bytes = None
 
-    with tab2:
-        st.markdown("### Download audio from YouTube")
-        yt_url = st.text_input(
-            "YouTube URL",
-            placeholder="https://youtu.be/... or https://www.youtube.com/watch?v=...",
-            key="yt_url"
-        )
+        with tab1:
+            uploaded_file = st.file_uploader(
+                "Choose an audio file",
+                type=["audio/*"],
+                key="audio_upload",
+                label_visibility="collapsed",
+                help="Supports MP3, WAV, M4A, OGG, WEBM, FLAC, AAC (up to 200MB)"
+            )
+            if uploaded_file:
+                raw_audio_path = save_uploaded_file(uploaded_file)
+                source_label = f"Upload: {uploaded_file.name}"
+                ext = Path(uploaded_file.name).suffix.lstrip(".")
+                st.audio(uploaded_file, format=f"audio/{ext}")
 
-        st.caption("YouTube may require cookies for authentication.")
-        cookies_file = st.file_uploader(
-            "Upload cookies.txt (Netscape format)",
-            type=["txt"],
-            key="yt_cookies",
-            help="Export cookies from your browser using a cookie extension in Netscape format"
-        )
+        with tab2:
+            yt_url = st.text_input(
+                "YouTube URL",
+                placeholder="https://youtu.be/... or https://www.youtube.com/watch?v=...",
+                key="yt_url"
+            )
 
-        cookies_path = None
-        if cookies_file:
-            cookies_path = os.path.join(tempfile.mkdtemp(), "cookies.txt")
-            with open(cookies_path, "wb") as f:
-                f.write(cookies_file.getvalue())
-            st.success("✅ Cookies loaded")
+            st.caption("YouTube may require cookies for authentication.")
+            cookies_file = st.file_uploader(
+                "Upload cookies.txt (Netscape format)",
+                type=["txt"],
+                key="yt_cookies",
+                help="Export cookies from your browser using a cookie extension in Netscape format"
+            )
 
-        yt_col1, yt_col2 = st.columns([1, 3])
-        with yt_col1:
-            download_btn = st.button("⬇️ Download Audio", key="yt_download",
-                                     disabled=not yt_url)
-        with yt_col2:
-            if download_btn and yt_url:
-                with st.spinner("Downloading audio from YouTube... (this may take 1-2 minutes)"):
-                    try:
-                        audio_dl_path, video_title = download_youtube_audio(yt_url, cookies_path)
-                        raw_audio_path = audio_dl_path
-                        source_label = f"YouTube: {video_title}"
-                        st.success(f"✅ Downloaded: {video_title}")
-                        st.audio(audio_dl_path)
-                    except RuntimeError as e:
-                        st.error(f"❌ Download failed: {e}")
+            cookies_path = None
+            if cookies_file:
+                cookies_path = os.path.join(tempfile.mkdtemp(), "cookies.txt")
+                with open(cookies_path, "wb") as f:
+                    f.write(cookies_file.getvalue())
+                st.success("✅ Cookies loaded")
 
-    with tab3:
-        st.markdown("### Record audio from your microphone")
-        st.caption("Browser records in WebM format — the app will convert it to WAV automatically.")
-        audio_value = st.audio_input(
-            "Click to record",
-            key="audio_record",
-            help="Click the microphone button to start recording"
-        )
-        if audio_value:
-            # Save the raw recording (browser typically outputs WebM/Opus)
-            raw_audio_path = save_uploaded_file(audio_value)
+            if st.button("⬇️ Download Audio", key="yt_download", disabled=not yt_url):
+                if yt_url:
+                    with st.spinner("Downloading audio from YouTube... (this may take 1-2 minutes)"):
+                        try:
+                            audio_dl_path, video_title = download_youtube_audio(yt_url, cookies_path)
+                            raw_audio_path = audio_dl_path
+                            source_label = f"YouTube: {video_title}"
+                            st.success(f"✅ Downloaded: {video_title}")
+                            st.audio(audio_dl_path)
+                        except RuntimeError as e:
+                            st.error(f"❌ Download failed: {e}")
 
-            # Detect the actual format of the recorded audio
-            actual_format = detect_audio_format(raw_audio_path)
-            log.info(f"Recording detected format: {actual_format}")
-
-            if actual_format == "webm" or actual_format == "ogg" or actual_format == "unknown":
-                source_label = f"Recording ({actual_format.upper()} → WAV conversion required)"
-            else:
-                source_label = f"Recording ({actual_format.upper()})"
-
-            st.audio(audio_value)
-
-            # Convert to proper WAV for download — must use ffmpeg for non-WAV formats
-            recorded_wav_bytes = None
-            conversion_error = None
-
+        with tab3:
+            st.caption("Click the mic to start recording. Click again to stop.")
             try:
-                wav_dl_path = convert_to_wav(raw_audio_path)
-                # Verify the output is actually a valid WAV
-                verify_fmt = detect_audio_format(wav_dl_path)
-                if verify_fmt == "wav":
-                    with open(wav_dl_path, "rb") as f:
-                        recorded_wav_bytes = f.read()
-                else:
-                    conversion_error = f"Conversion produced {verify_fmt.upper()} instead of WAV"
-                    log.error(conversion_error)
-            except Exception as e:
-                conversion_error = str(e)
-                log.error(f"WAV conversion failed: {e}")
+                from audio_recorder_streamlit import audio_recorder
+                audio_bytes = audio_recorder(
+                    icon="🎤",
+                    sample_rate=16000,
+                    energy_threshold=(-1.0, 1.0),
+                    pause_threshold=600.0,
+                    key="audio_recorder_widget"
+                )
+                if audio_bytes:
+                    # Save raw recording bytes to a temp WAV file
+                    rec_dir = tempfile.mkdtemp(prefix="recording_")
+                    rec_path = os.path.join(rec_dir, "recording.wav")
+                    with open(rec_path, "wb") as f:
+                        f.write(audio_bytes)
 
-            # Provide .wav download button only if conversion succeeded
-            if recorded_wav_bytes:
-                st.download_button(
-                    "💾 Download recording as .wav",
-                    data=recorded_wav_bytes,
-                    file_name="recording.wav",
-                    mime="audio/wav",
-                    key="download_recording_wav"
+                    raw_audio_path = rec_path
+                    source_label = "Recording (WAV)"
+                    st.audio(audio_bytes, format="audio/wav")
+
+                    # Provide .wav download
+                    st.download_button(
+                        "💾 Download recording as .wav",
+                        data=audio_bytes,
+                        file_name="recording.wav",
+                        mime="audio/wav",
+                        key="download_recording_wav"
+                    )
+            except ImportError:
+                st.warning("audio-recorder-streamlit not installed. Using browser recorder fallback.")
+                audio_value = st.audio_input(
+                    "Click to record",
+                    key="audio_record",
+                    help="Click the microphone button to start recording"
                 )
-            else:
-                # Conversion failed — provide the original format with a clear label
-                st.warning(
-                    f"⚠️ Could not convert recording to WAV ({conversion_error}). "
-                    f"The original {actual_format.upper()} file will be used for transcription "
-                    f"but may not play correctly in all players."
-                )
-                st.download_button(
-                    f"💾 Download recording as .{actual_format}",
-                    data=audio_value.getvalue(),
-                    file_name=f"recording.{actual_format}",
-                    mime=f"audio/{actual_format}",
-                    key="download_recording_raw"
-                )
+                if audio_value:
+                    raw_audio_path = save_uploaded_file(audio_value)
+                    actual_format = detect_audio_format(raw_audio_path)
+                    source_label = f"Recording ({actual_format.upper()})"
+                    st.audio(audio_value)
+
+                    try:
+                        wav_dl_path = convert_to_wav(raw_audio_path)
+                        verify_fmt = detect_audio_format(wav_dl_path)
+                        if verify_fmt == "wav":
+                            with open(wav_dl_path, "rb") as f:
+                                recorded_wav_bytes = f.read()
+                    except Exception as e:
+                        log.error(f"WAV conversion failed: {e}")
+
+                    if recorded_wav_bytes:
+                        st.download_button(
+                            "💾 Download recording as .wav",
+                            data=recorded_wav_bytes,
+                            file_name="recording.wav",
+                            mime="audio/wav",
+                            key="download_recording_wav"
+                        )
 
     # ── Convert & Show Info ──────────────────────────────────────────────────
-    st.markdown("---")
-
     duration_min = 0.0
     if raw_audio_path:
         try:
@@ -860,10 +1054,7 @@ def main():
             duration_min = get_audio_duration(wav_path)
             file_size_mb = os.path.getsize(raw_audio_path) / (1024 * 1024)
 
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Duration", f"{duration_min:.1f} min")
-            col2.metric("File Size", f"{file_size_mb:.1f} MB")
-            col3.metric("Est. Chunks", f"{max(1, int(duration_min / 4) + 1)}")
+            st.success(f"**{source_label}** — {duration_min:.1f} min · {file_size_mb:.1f} MB")
 
             if duration_min > MAX_AUDIO_DURATION:
                 st.warning(f"⚠️ Audio is {duration_min:.0f} minutes. Max supported: {MAX_AUDIO_DURATION} min. "
@@ -872,78 +1063,112 @@ def main():
             st.error(f"❌ Could not process audio: {e}")
             wav_path = None
 
-    # ── Step 2: Transcribe ──────────────────────────────────────────────────
-    if wav_path:
-        st.markdown("## 🚀 Transcribe")
+    # ── Transcribe Button ────────────────────────────────────────────────────
+    can_transcribe = wav_path is not None and bool(api_key)
 
-        if st.button("🚀 Start Transcription", type="primary", key="transcribe_btn"):
-            progress_bar = st.progress(0.0, text="Preparing audio...")
-            status_text = st.empty()
+    if st.button("🚀 Transcribe", type="primary", disabled=not can_transcribe, use_container_width=True):
+        with col_output:
+            st.subheader("📝 Transcript")
 
-            def progress_callback(progress: float, message: str):
-                progress_bar.progress(progress, text=message)
-                status_text.info(message)
+        progress_bar = st.progress(0.0, text="Preparing audio...")
+        status_text = st.empty()
 
-            start_time = time.time()
+        def progress_callback(progress: float, message: str):
+            progress_bar.progress(progress, text=message)
+            status_text.info(message)
 
-            try:
-                transcript = transcribe_audio(
-                    wav_path,
-                    api_key=api_key,
-                    model=model_choice,
-                    language=language,
-                    progress_callback=progress_callback
+        start_time = time.time()
+
+        try:
+            transcript = transcribe_audio(
+                wav_path,
+                provider=provider,
+                api_key=api_key,
+                language=language,
+                progress_callback=progress_callback
+            )
+
+            elapsed = time.time() - start_time
+            progress_bar.progress(1.0, text="✅ Transcription complete!")
+            st.session_state.transcript = transcript
+
+            method = f"{provider_label} — {duration_min:.1f} min audio — {elapsed:.1f}s"
+            st.session_state.transcript_method = method
+
+        except Exception as e:
+            progress_bar.empty()
+            st.error(f"❌ Transcription failed: {e}")
+            log.exception("Transcription error")
+
+    # ── Output Display (matching PDF-to-MD pattern) ──────────────────────────
+    with col_output:
+        if st.session_state.transcript:
+            st.subheader("📝 Transcript")
+
+            transcript_text = st.session_state.transcript
+            char_count = len(transcript_text)
+            method = st.session_state.get("transcript_method", provider_label)
+            st.caption(f"🔧 {method} · {char_count:,} chars")
+
+            # Action buttons FIRST — always visible, no scrolling needed
+            dl_cols = st.columns(2)
+            with dl_cols[0]:
+                st.download_button(
+                    "📥 Download .txt",
+                    data=transcript_text.encode("utf-8"),
+                    file_name=TRANSCRIPT_FILENAME,
+                    mime="text/plain",
+                    use_container_width=True,
+                    key="download_txt"
                 )
+            with dl_cols[1]:
+                copy_button(transcript_text, "📋 Copy Transcript", key_suffix="transcript")
 
-                elapsed = time.time() - start_time
-                progress_bar.progress(1.0, text="✅ Transcription complete!")
-                st.session_state.transcript = transcript
+            # Second row: JSON download + editable toggle
+            dl_cols2 = st.columns(2)
+            with dl_cols2[0]:
+                st.download_button(
+                    "📄 Download .json",
+                    data=json.dumps({
+                        "source": source_label,
+                        "duration_minutes": round(duration_min, 2),
+                        "language": language,
+                        "provider": provider,
+                        "model": MIMO_MODEL if provider == "mimo" else GROQ_WHISPER_MODEL,
+                        "transcript": transcript_text,
+                        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                    }, indent=2, ensure_ascii=False),
+                    file_name="transcript.json",
+                    mime="application/json",
+                    use_container_width=True,
+                    key="download_json"
+                )
+            with dl_cols2[1]:
+                # View toggle
+                view = st.radio("Preview", ["Rendered", "Raw Text"], horizontal=True, key="view_toggle", label_visibility="collapsed")
 
-                st.info(f"Source: {source_label} | Duration: {duration_min:.1f} min | Time: {elapsed:.1f}s")
+            # Scrollable preview — fixed height, own scrollbar
+            safe_transcript_display(transcript_text, view_mode=view)
 
-            except Exception as e:
-                progress_bar.empty()
-                st.error(f"❌ Transcription failed: {e}")
-                log.exception("Transcription error")
+        else:
+            st.subheader("📝 Transcript")
+            st.info("Transcript will appear here after you upload audio and click Transcribe.")
 
-    # ── Show Transcript ─────────────────────────────────────────────────────
-    if st.session_state.transcript:
-        st.markdown("## 📝 Transcript")
-        edited_transcript = st.text_area(
-            "Transcript (editable)",
-            value=st.session_state.transcript,
-            height=400,
-            key="transcript_output"
-        )
-        st.session_state.transcript = edited_transcript
+            with st.expander("💡 How it works"):
+                st.markdown(
+                    """
+                    1. **Input**: Upload audio, paste a YouTube URL, or record from your mic
+                    2. **Convert**: Audio is converted to 16 kHz mono WAV (ffmpeg or pure-Python fallback)
+                    3. **Chunk**: Long audio is split into overlapping segments for reliable transcription
+                    4. **Transcribe**: Each chunk is sent to your selected provider (MiMo V2.5 or Groq Whisper)
+                    5. **Merge**: Overlapping chunks are stitched together with deduplication
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(
-                "📄 Download transcript.txt",
-                data=edited_transcript.encode("utf-8"),
-                file_name=TRANSCRIPT_FILENAME,
-                mime="text/plain",
-                key="download_txt"
-            )
-        with col2:
-            st.download_button(
-                "📋 Download transcript.json",
-                data=json.dumps({
-                    "source": source_label,
-                    "duration_minutes": round(duration_min, 2),
-                    "language": language,
-                    "model": model_choice,
-                    "transcript": edited_transcript,
-                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-                }, indent=2, ensure_ascii=False),
-                file_name="transcript.json",
-                mime="application/json",
-                key="download_json"
-            )
+                    **MiMo V2.5**: Omnimodal ASR model, handles long context well.
+                    **Groq Whisper**: Ultra-fast transcription using Whisper-large-v3 on Groq's LPU infrastructure.
 
-    elif not raw_audio_path:
-        st.info("👆 Upload an audio file, enter a YouTube URL, or record audio to get started.")
+                    **API keys persist in your URL** — reload the page and they'll still be there.
+                    """
+                )
 
 
 if __name__ == "__main__":
