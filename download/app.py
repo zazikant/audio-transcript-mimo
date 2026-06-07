@@ -1,23 +1,14 @@
 #!/usr/bin/env python3
 """
-Audio-to-Transcript Pipeline — MiMo V2.5 ASR
-==============================================
+Audio → Transcript — MiMo V2.5 ASR
+====================================
 Converts audio (uploaded, recorded, or from YouTube) to transcript.txt
 using MiMo V2.5 omnimodal ASR via OpenCode Go API.
-
-Full Pipeline:
-  1. Audio Input → Transcription (MiMo V2.5)
-  2. Seed Research → Deep Research (adversarial)
-  3. Circular Dependencies Cleanup
-  4. Atomic Graph (Knowledge Map)
-  5. Second Brain RAG Storage
 
 No pydub — uses ffmpeg directly (Python 3.13+ safe).
 """
 
 import os
-import io
-import re
 import json
 import time
 import base64
@@ -29,17 +20,11 @@ import subprocess
 from pathlib import Path
 
 import streamlit as st
-import httpx
 from openai import OpenAI
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
-OPCODE_API_KEY = os.environ.get(
-    "OPENCODE_API_KEY",
-    "sk-ljxfsgwP7tLRFfTIgmMOd7n4vBcXNTM34UAVR30mMCNMU28F9MsHJTKKssdqdhnR"
-)
 OPCODE_BASE_URL = "https://opencode.ai/zen/go/v1"
-MIMO_MODEL = os.environ.get("MIMO_MODEL", "mimo-v2-omni")
 
 # Audio chunking config
 CHUNK_DURATION_MIN = int(os.environ.get("CHUNK_DURATION_MIN", "3"))
@@ -52,14 +37,14 @@ TRANSCRIPT_FILENAME = "transcript.txt"
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(__name__)
 
+
 # ─── OpenCode Go Client ──────────────────────────────────────────────────────
 
-@st.cache_resource
-def get_opencode_client() -> OpenAI:
+def get_opencode_client(api_key: str) -> OpenAI:
     """Create an OpenAI client pointed at OpenCode Go API."""
     return OpenAI(
         base_url=OPCODE_BASE_URL,
-        api_key=OPCODE_API_KEY,
+        api_key=api_key,
     )
 
 
@@ -92,10 +77,7 @@ def _check_ffmpeg() -> bool:
 # ── Pure-Python WAV helpers (no ffmpeg needed) ─────────────────────────────
 
 def _read_wav_header(filepath: str) -> dict:
-    """Read WAV file header and return metadata dict.
-
-    Returns dict with keys: channels, bits_per_sample, frame_rate, num_frames, duration_sec
-    """
+    """Read WAV file header and return metadata dict."""
     with open(filepath, "rb") as f:
         riff = f.read(4)
         if riff != b"RIFF":
@@ -105,7 +87,6 @@ def _read_wav_header(filepath: str) -> dict:
         if wave != b"WAVE":
             raise ValueError(f"Not a WAV file (WAVE marker missing): {wave}")
 
-        # Parse chunks
         channels = bits_per_sample = frame_rate = num_frames = 0
         while True:
             chunk_id = f.read(4)
@@ -115,18 +96,15 @@ def _read_wav_header(filepath: str) -> dict:
 
             if chunk_id == b"fmt ":
                 fmt_data = f.read(chunk_size)
-                audio_format = struct.unpack("<H", fmt_data[0:2])[0]
                 channels = struct.unpack("<H", fmt_data[2:4])[0]
                 frame_rate = struct.unpack("<I", fmt_data[4:8])[0]
-                # byte_rate = struct.unpack("<I", fmt_data[8:12])[0]
-                # block_align = struct.unpack("<H", fmt_data[12:14])[0]
                 bits_per_sample = struct.unpack("<H", fmt_data[14:16])[0]
                 if chunk_size > 16:
                     f.read(chunk_size - 16)
             elif chunk_id == b"data":
                 bytes_per_sample = bits_per_sample // 8 if bits_per_sample else 1
                 num_frames = chunk_size // (channels * bytes_per_sample) if channels and bits_per_sample else 0
-                break  # Found data chunk, stop
+                break
             else:
                 f.read(chunk_size)
 
@@ -143,23 +121,16 @@ def _read_wav_header(filepath: str) -> dict:
 
 def _resample_wav(input_path: str, output_path: str,
                   target_rate: int = 16000, target_channels: int = 1) -> str:
-    """Convert WAV to target sample rate and channels using pure Python.
-
-    Uses linear interpolation for sample rate conversion.
-    Works without ffmpeg for WAV files.
-    """
+    """Convert WAV to target sample rate and channels using pure Python."""
     header = _read_wav_header(input_path)
     src_rate = header["frame_rate"]
     src_channels = header["channels"]
     src_bits = header["bits_per_sample"]
     src_bytes = header["bytes_per_sample"]
 
-    # Read all audio data
     raw_data = b""
     with open(input_path, "rb") as f:
-        # Skip RIFF header
-        f.read(12)  # "RIFF" + file_size + "WAVE"
-        # Now read chunks
+        f.read(12)
         while True:
             chunk_id = f.read(4)
             if len(chunk_id) < 4:
@@ -177,7 +148,6 @@ def _resample_wav(input_path: str, output_path: str,
     if not raw_data:
         raise ValueError(f"Could not find data chunk in WAV file: {input_path}")
 
-    # Decode samples
     total_samples = len(raw_data) // src_bytes
 
     if src_bits == 16:
@@ -189,10 +159,8 @@ def _resample_wav(input_path: str, output_path: str,
         fmt = "<" + "i" * total_samples
         samples = [s >> 16 for s in struct.unpack(fmt, raw_data[:total_samples * 4])]
     else:
-        # Fallback: just copy as-is
         samples = list(struct.unpack("<" + "h" * (len(raw_data) // 2), raw_data[:len(raw_data) // 2 * 2]))
 
-    # Convert to mono if stereo
     if src_channels > 1:
         mono_samples = []
         for i in range(0, len(samples), src_channels):
@@ -200,7 +168,6 @@ def _resample_wav(input_path: str, output_path: str,
             mono_samples.append(sum(frame) // src_channels)
         samples = mono_samples
 
-    # Resample to target_rate using linear interpolation
     if src_rate != target_rate:
         ratio = src_rate / target_rate
         new_length = int(len(samples) / ratio)
@@ -216,28 +183,23 @@ def _resample_wav(input_path: str, output_path: str,
             resampled.append(max(-32768, min(32767, val)))
         samples = resampled
 
-    # Write output WAV (batch write for performance)
     num_frames = len(samples)
-    data_size = num_frames * 2  # 16-bit = 2 bytes per sample
-    # Clamp all samples to int16 range
+    data_size = num_frames * 2
     clamped = [max(-32768, min(32767, s)) for s in samples]
     audio_data = struct.pack("<" + "h" * num_frames, *clamped)
 
     with open(output_path, "wb") as f:
-        # RIFF header
         f.write(b"RIFF")
         f.write(struct.pack("<I", 36 + data_size))
         f.write(b"WAVE")
-        # fmt chunk
         f.write(b"fmt ")
-        f.write(struct.pack("<I", 16))  # chunk size
-        f.write(struct.pack("<H", 1))   # PCM format
-        f.write(struct.pack("<H", 1))   # mono
-        f.write(struct.pack("<I", target_rate))  # sample rate
-        f.write(struct.pack("<I", target_rate * 2))  # byte rate (mono 16-bit)
-        f.write(struct.pack("<H", 2))   # block align
-        f.write(struct.pack("<H", 16))  # bits per sample
-        # data chunk
+        f.write(struct.pack("<I", 16))
+        f.write(struct.pack("<H", 1))
+        f.write(struct.pack("<H", 1))
+        f.write(struct.pack("<I", target_rate))
+        f.write(struct.pack("<I", target_rate * 2))
+        f.write(struct.pack("<H", 2))
+        f.write(struct.pack("<H", 16))
         f.write(b"data")
         f.write(struct.pack("<I", data_size))
         f.write(audio_data)
@@ -261,10 +223,9 @@ def _chunk_wav_python(input_wav: str, chunk_minutes: int, overlap_seconds: int,
     if total_sec <= chunk_sec:
         return [input_wav]
 
-    # Read all audio data
     raw_data = b""
     with open(input_wav, "rb") as f:
-        f.read(12)  # Skip RIFF header
+        f.read(12)
         while True:
             chunk_id = f.read(4)
             if len(chunk_id) < 4:
@@ -284,7 +245,6 @@ def _chunk_wav_python(input_wav: str, chunk_minutes: int, overlap_seconds: int,
 
     bytes_per_frame = channels * bytes_per_sample
     total_frames = len(raw_data) // bytes_per_frame
-
     chunk_frames = int(chunk_sec * frame_rate)
     overlap_frames = int(overlap_sec * frame_rate)
 
@@ -297,7 +257,6 @@ def _chunk_wav_python(input_wav: str, chunk_minutes: int, overlap_seconds: int,
         start_byte = start_frame * bytes_per_frame
         end_byte = end_frame * bytes_per_frame
         chunk_data = raw_data[start_byte:end_byte]
-
         out_path = os.path.join(output_dir, f"chunk_{idx:04d}.wav")
         data_size = len(chunk_data)
 
@@ -307,7 +266,7 @@ def _chunk_wav_python(input_wav: str, chunk_minutes: int, overlap_seconds: int,
             f.write(b"WAVE")
             f.write(b"fmt ")
             f.write(struct.pack("<I", 16))
-            f.write(struct.pack("<H", 1))  # PCM
+            f.write(struct.pack("<H", 1))
             f.write(struct.pack("<H", channels))
             f.write(struct.pack("<I", frame_rate))
             f.write(struct.pack("<I", frame_rate * bytes_per_frame))
@@ -318,7 +277,6 @@ def _chunk_wav_python(input_wav: str, chunk_minutes: int, overlap_seconds: int,
             f.write(chunk_data)
 
         chunks.append(out_path)
-
         if end_frame >= total_frames:
             break
         start_frame = end_frame - overlap_frames
@@ -327,10 +285,10 @@ def _chunk_wav_python(input_wav: str, chunk_minutes: int, overlap_seconds: int,
     return chunks
 
 
-# ── High-level audio API (uses ffmpeg if available, pure Python fallback) ───
+# ── High-level audio API ────────────────────────────────────────────────────
 
 def get_audio_duration(filepath: str) -> float:
-    """Return audio duration in minutes. Uses ffprobe if available, else WAV header."""
+    """Return audio duration in minutes."""
     if _check_ffmpeg():
         cmd = [
             "ffprobe", "-v", "error",
@@ -342,17 +300,12 @@ def get_audio_duration(filepath: str) -> float:
         if result.returncode == 0:
             return float(result.stdout.strip()) / 60.0
 
-    # Fallback: read WAV header
     header = _read_wav_header(filepath)
     return header["duration_sec"] / 60.0
 
 
 def convert_to_wav(input_path: str, output_path: str = None) -> str:
-    """Convert any audio file to 16kHz mono 16-bit PCM WAV.
-
-    Uses ffmpeg if available. Falls back to pure-Python WAV resampling
-    for WAV inputs. Non-WAV files require ffmpeg.
-    """
+    """Convert any audio file to 16kHz mono 16-bit PCM WAV."""
     if output_path is None:
         fd, output_path = tempfile.mkstemp(suffix=".wav")
         os.close(fd)
@@ -360,22 +313,17 @@ def convert_to_wav(input_path: str, output_path: str = None) -> str:
     if _check_ffmpeg():
         cmd = [
             "ffmpeg", "-y", "-i", input_path,
-            "-ar", "16000",       # 16kHz sample rate
-            "-ac", "1",           # mono
-            "-sample_fmt", "s16", # 16-bit PCM
-            "-f", "wav",
-            output_path
+            "-ar", "16000", "-ac", "1", "-sample_fmt", "s16",
+            "-f", "wav", output_path
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
         if result.returncode == 0:
             return output_path
         log.warning(f"ffmpeg conversion failed, trying WAV fallback: {result.stderr[-200:]}")
 
-    # Pure-Python fallback: only works for WAV files
     try:
         header = _read_wav_header(input_path)
         if header["frame_rate"] == 16000 and header["channels"] == 1 and header["bits_per_sample"] == 16:
-            # Already in target format — just copy
             shutil.copy2(input_path, output_path)
             return output_path
         return _resample_wav(input_path, output_path)
@@ -389,10 +337,7 @@ def convert_to_wav(input_path: str, output_path: str = None) -> str:
 def chunk_audio_wav(input_wav: str, chunk_minutes: int = CHUNK_DURATION_MIN,
                     overlap_seconds: int = CHUNK_OVERLAP_SEC,
                     output_dir: str = None) -> list[str]:
-    """Split a WAV file into overlapping chunks.
-
-    Uses ffmpeg if available, else pure-Python WAV splitting.
-    """
+    """Split a WAV file into overlapping chunks."""
     if output_dir is None:
         output_dir = tempfile.mkdtemp(prefix="audio_chunks_")
 
@@ -412,26 +357,20 @@ def chunk_audio_wav(input_wav: str, chunk_minutes: int = CHUNK_DURATION_MIN,
             end = min(start + chunk_sec, total_sec)
             out_path = os.path.join(output_dir, f"chunk_{idx:04d}.wav")
             cmd = [
-                "ffmpeg", "-y",
-                "-i", input_wav,
-                "-ss", str(start),
-                "-to", str(end),
+                "ffmpeg", "-y", "-i", input_wav,
+                "-ss", str(start), "-to", str(end),
                 "-ar", "16000", "-ac", "1", "-sample_fmt", "s16",
                 "-f", "wav", out_path
             ]
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
             if result.returncode == 0:
                 chunks.append(out_path)
-            else:
-                log.warning(f"Chunk {idx} extraction failed: {result.stderr[:200]}")
-
             if end >= total_sec:
                 break
             start = end - overlap_sec
             idx += 1
         return chunks
 
-    # Fallback: pure Python
     return _chunk_wav_python(input_wav, chunk_minutes, overlap_seconds, output_dir)
 
 
@@ -458,13 +397,10 @@ def save_uploaded_file(uploaded_file, output_dir: str = None) -> str:
 
 # ─── Transcription Engine ────────────────────────────────────────────────────
 
-def transcribe_chunk(wav_path: str, language: str = "en",
-                     prompt_context: str = "") -> str:
-    """Transcribe a single audio chunk using MiMo V2.5 via OpenCode Go API.
-
-    Uses the audio_url content format with base64 data URI.
-    """
-    client = get_opencode_client()
+def transcribe_chunk(wav_path: str, api_key: str, model: str,
+                     language: str = "en", prompt_context: str = "") -> str:
+    """Transcribe a single audio chunk using MiMo V2.5 via OpenCode Go API."""
+    client = get_opencode_client(api_key)
 
     audio_b64 = wav_to_base64(wav_path)
     audio_data_uri = f"data:audio/wav;base64,{audio_b64}"
@@ -494,7 +430,7 @@ def transcribe_chunk(wav_path: str, language: str = "en",
     for attempt in range(max_retries):
         try:
             response = client.chat.completions.create(
-                model=MIMO_MODEL,
+                model=model,
                 messages=[
                     {"role": "system", "content": system_msg},
                     {"role": "user", "content": user_parts},
@@ -505,7 +441,6 @@ def transcribe_chunk(wav_path: str, language: str = "en",
             msg = response.choices[0].message
             result = None
 
-            # Try content first
             if msg.content:
                 result = msg.content.strip()
 
@@ -513,10 +448,7 @@ def transcribe_chunk(wav_path: str, language: str = "en",
             if not result:
                 rc = getattr(msg, "reasoning_content", None)
                 if rc:
-                    # Extract actual transcript from reasoning
-                    # Reasoning often contains the transcript at the end
                     lines = rc.strip().split("\n")
-                    # Find lines that look like actual transcript (not reasoning)
                     transcript_lines = []
                     skip_patterns = ["The user", "Let me", "I need to", "This is",
                                      "I'll", "Looking at", "Checking", "Analyzing",
@@ -524,9 +456,7 @@ def transcribe_chunk(wav_path: str, language: str = "en",
                     for line in lines:
                         stripped = line.strip()
                         if stripped and not any(stripped.startswith(p) for p in skip_patterns):
-                            # Check if it looks like a transcript quote
                             if stripped.startswith('"') or stripped.startswith("'"):
-                                # Remove quotes
                                 cleaned = stripped.strip('"').strip("'")
                                 if len(cleaned) > 5:
                                     transcript_lines.append(cleaned)
@@ -550,12 +480,10 @@ def transcribe_chunk(wav_path: str, language: str = "en",
         except Exception as e:
             error_str = str(e)
             log.error(f"Transcription API error (attempt {attempt+1}): {e}")
-            # Check for model incompatibility with audio
             if "image input" in error_str.lower() or "no endpoints found" in error_str.lower():
                 return (
                     "[TRANSCRIPTION_ERROR: The selected model does not support audio input. "
-                    "Please switch to 'mimo-v2-omni' in the sidebar Settings. "
-                    "Only mimo-v2-omni and mimo-v2.5 support audio transcription.]"
+                    "Please switch to 'mimo-v2-omni' in the sidebar Settings.]"
                 )
             if attempt < max_retries - 1:
                 time.sleep(3 * (attempt + 1))
@@ -563,8 +491,8 @@ def transcribe_chunk(wav_path: str, language: str = "en",
                 return f"[TRANSCRIPTION_ERROR: {e}]"
 
 
-def transcribe_audio(wav_path: str, language: str = "en",
-                     progress_callback=None) -> str:
+def transcribe_audio(wav_path: str, api_key: str, model: str,
+                     language: str = "en", progress_callback=None) -> str:
     """Transcribe a full audio file (handles chunking for long audio)."""
     duration_min = get_audio_duration(wav_path)
     log.info(f"Transcribing audio: {duration_min:.1f} minutes")
@@ -572,7 +500,7 @@ def transcribe_audio(wav_path: str, language: str = "en",
     if duration_min <= 5:
         if progress_callback:
             progress_callback(0.1, "Transcribing audio...")
-        transcript = transcribe_chunk(wav_path, language=language)
+        transcript = transcribe_chunk(wav_path, api_key=api_key, model=model, language=language)
         if progress_callback:
             progress_callback(1.0, "Done!")
         return transcript
@@ -596,7 +524,8 @@ def transcribe_audio(wav_path: str, language: str = "en",
             progress_callback(progress * 0.9, msg)
 
         context = " ".join(transcript_parts[-2:]) if transcript_parts else ""
-        part = transcribe_chunk(chunk_path, language=language, prompt_context=context)
+        part = transcribe_chunk(chunk_path, api_key=api_key, model=model,
+                                language=language, prompt_context=context)
 
         if part and part != "[non-speech]":
             transcript_parts.append(part)
@@ -645,15 +574,7 @@ def merge_transcript_parts(parts: list[str]) -> str:
 # ─── YouTube Download ────────────────────────────────────────────────────────
 
 def download_youtube_audio(url: str, cookies_path: str = None) -> tuple[str, str]:
-    """Download audio from a YouTube URL using yt-dlp.
-
-    Args:
-        url: YouTube video URL.
-        cookies_path: Optional path to cookies file for authentication.
-
-    Returns:
-        Tuple of (file_path, video_title).
-    """
+    """Download audio from a YouTube URL using yt-dlp."""
     output_dir = tempfile.mkdtemp(prefix="yt_download_")
     output_template = os.path.join(output_dir, "yt_audio.%(ext)s")
 
@@ -680,8 +601,7 @@ def download_youtube_audio(url: str, cookies_path: str = None) -> tuple[str, str
             if "Sign in to confirm" in error_msg or "bot" in error_msg:
                 raise RuntimeError(
                     "YouTube requires authentication. Please upload your browser cookies "
-                    "file (Netscape format) using the 'Upload Cookies' button below. "
-                    "See: https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp"
+                    "file (Netscape format) using the 'Upload Cookies' button below."
                 )
             raise RuntimeError(f"yt-dlp failed: {error_msg}")
 
@@ -697,239 +617,41 @@ def download_youtube_audio(url: str, cookies_path: str = None) -> tuple[str, str
     except subprocess.TimeoutExpired:
         raise RuntimeError("YouTube download timed out (5 min limit)")
     except FileNotFoundError:
-        raise RuntimeError(
-            "yt-dlp not installed. Install with: pip install yt-dlp"
-        )
-
-
-# ─── Pipeline: Seed Research ─────────────────────────────────────────────────
-
-def run_seed_research(transcript: str, api_key: str) -> dict:
-    """Run seed research on the transcript to identify key topics and questions.
-
-    Uses MiMo V2.5 to analyze the transcript and generate research seeds.
-    """
-    client = OpenAI(base_url=OPCODE_BASE_URL, api_key=api_key)
-
-    prompt = f"""Analyze the following transcript and generate a research seed document.
-
-For each major topic discussed, identify:
-1. **Core Claim**: What is the main assertion?
-2. **Evidence Provided**: What evidence supports it?
-3. **Open Questions**: What questions remain unanswered?
-4. **Contradictions**: Are there internal contradictions or tensions?
-5. **Research Directions**: What further investigation would be valuable?
-
-Also provide:
-- A 2-3 sentence executive summary
-- Top 5 key entities (people, organizations, concepts)
-- Suggested search queries for deep research
-
-TRANSCRIPT:
-{transcript[:8000]}"""
-
-    try:
-        response = client.chat.completions.create(
-            model=MIMO_MODEL,
-            messages=[
-                {"role": "system", "content": "You are a research analyst. Generate structured research seeds from transcripts. Output in clean markdown."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=4096,
-            temperature=0.3,
-        )
-        msg = response.choices[0].message
-        content = msg.content or getattr(msg, "reasoning_content", "") or ""
-        return {"status": "success", "content": content.strip()}
-    except Exception as e:
-        return {"status": "error", "content": f"Seed research failed: {e}"}
-
-
-# ─── Pipeline: Deep Research (Adversarial) ───────────────────────────────────
-
-def run_deep_research(seed_doc: str, api_key: str) -> dict:
-    """Run adversarial deep research based on seed research findings.
-
-    Uses MiMo V2.5 with adversarial prompting to stress-test claims.
-    """
-    client = OpenAI(base_url=OPCODE_BASE_URL, api_key=api_key)
-
-    prompt = f"""You are an adversarial research critic. Given these research seeds, perform deep analysis:
-
-1. **Claim Verification**: For each core claim, argue BOTH for and against it. Identify which side has stronger evidence.
-2. **Blind Spot Detection**: What perspectives are completely missing from the original analysis?
-3. **Assumption Audit**: List every implicit assumption in the original content.
-4. **Alternative Explanations**: For each major finding, propose at least 2 alternative explanations.
-5. **Risk Assessment**: What are the risks of being wrong about the key claims?
-6. **Synthesis**: Reconcile the adversarial findings into a nuanced conclusion.
-
-RESEARCH SEEDS:
-{seed_doc[:8000]}"""
-
-    try:
-        response = client.chat.completions.create(
-            model=MIMO_MODEL,
-            messages=[
-                {"role": "system", "content": "You are an adversarial research analyst. Challenge assumptions, find blind spots, and stress-test claims. Output in clean markdown."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=4096,
-            temperature=0.4,
-        )
-        msg = response.choices[0].message
-        content = msg.content or getattr(msg, "reasoning_content", "") or ""
-        return {"status": "success", "content": content.strip()}
-    except Exception as e:
-        return {"status": "error", "content": f"Deep research failed: {e}"}
-
-
-# ─── Pipeline: Circular Dependencies Agent ───────────────────────────────────
-
-def run_circular_dependencies(text: str) -> dict:
-    """Clean and structure text using the Circular Dependencies Agent."""
-    try:
-        resp = httpx.post(
-            "https://ax-opencode-translator.vercel.app/api/translate",
-            json={
-                "text": (
-                    "Convert telegraphic notes into a structured document "
-                    "with circular dependencies removal. Preserve Facts, "
-                    "headings, subheadings, bullet points. Add "
-                    "Argumentative connectives and logical flow. "
-                    "Style polished.\n\nInput:\n\n" + text
-                ),
-                "sourceLanguage": "en",
-                "targetLanguage": "en",
-                "fast": True
-            },
-            timeout=60
-        )
-        if resp.status_code == 200:
-            cleaned = resp.json().get("translatedText", "")
-            return {"status": "success", "content": cleaned}
-        else:
-            return {"status": "error", "content": f"Circular Dependencies returned: {resp.status_code}"}
-    except Exception as e:
-        return {"status": "error", "content": f"Circular Dependencies failed: {e}"}
-
-
-# ─── Pipeline: Atomic Graph ──────────────────────────────────────────────────
-
-def run_atomic_graph(text: str) -> dict:
-    """Build a knowledge graph from text using the Atomic Graph pipeline."""
-    system_prompt = (
-        "You are a semantic reasoning engine that builds knowledge graphs "
-        "from raw thinking. You do NOT merely reformat or summarise — you "
-        "REASON through the semantic space of ideas. CRITICAL OUTPUT RULES: "
-        "Always respond with valid JSON only. No markdown, no explanation, "
-        "no code fences."
-    )
-
-    extract_prompt = (
-        "Extract atomic concepts from these notes. Each concept = ONE idea only. "
-        "Return JSON: "
-        '{ "nodes": [{ "id": "c1", "title": "...", '
-        '"summary": "...", "tags": ["..."] }], '
-        '"edges": [{ "source": "c1", "target": "c2", '
-        '"relation": "...", "weight": 0.9 }] }\n\n'
-        f"Raw notes:\n{text[:5000]}"
-    )
-
-    try:
-        ag_resp = httpx.post(
-            "https://atomic-graph.vercel.app/api/nvidia",
-            json={
-                "apiKey": "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",
-                "model": "openai/gpt-oss-120b",
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": extract_prompt}
-                ]
-            },
-            timeout=120
-        )
-        if ag_resp.status_code == 200:
-            ag_data = ag_resp.json()
-            content = ag_data.get("choices", [{}])[0].get("message", {}).get("content", "")
-            try:
-                graph = json.loads(content)
-                return {"status": "success", "content": json.dumps(graph, indent=2, ensure_ascii=False)}
-            except json.JSONDecodeError:
-                return {"status": "success", "content": content}
-        else:
-            return {"status": "error", "content": f"Atomic Graph returned: {ag_resp.status_code}"}
-    except Exception as e:
-        return {"status": "error", "content": f"Atomic Graph failed: {e}"}
-
-
-# ─── Pipeline: RAG Second Brain ──────────────────────────────────────────────
-
-def save_to_rag(text: str, name: str = None) -> dict:
-    """Save text to the RAG Document Assistant (Second Brain)."""
-    if name is None:
-        name = f"transcript_{int(time.time())}.txt"
-
-    try:
-        rag_resp = httpx.post(
-            "https://rag-document-assistant-three.vercel.app/api/upload",
-            json={
-                "type": "text",
-                "content": text,
-                "name": name,
-                "mode": "Add"
-            },
-            timeout=30
-        )
-        if rag_resp.status_code == 200:
-            return {"status": "success", "content": "Saved to Second Brain!"}
-        else:
-            return {"status": "error", "content": f"RAG returned: {rag_resp.status_code}"}
-    except Exception as e:
-        return {"status": "error", "content": f"RAG save failed: {e}"}
-
-
-def query_rag(query: str) -> dict:
-    """Query the RAG Document Assistant."""
-    try:
-        rag_resp = httpx.post(
-            "https://rag-document-assistant-three.vercel.app/api/query",
-            json={"query": query},
-            timeout=30
-        )
-        if rag_resp.status_code == 200:
-            data = rag_resp.json()
-            return {"status": "success", "content": data.get("response", str(data))}
-        else:
-            return {"status": "error", "content": f"RAG query returned: {rag_resp.status_code}"}
-    except Exception as e:
-        return {"status": "error", "content": f"RAG query failed: {e}"}
+        raise RuntimeError("yt-dlp not installed. Install with: pip install yt-dlp")
 
 
 # ─── Streamlit UI ────────────────────────────────────────────────────────────
 
 def main():
     st.set_page_config(
-        page_title="Audio Pipeline | MiMo V2.5 ASR",
+        page_title="Audio → Transcript | MiMo V2.5 ASR",
         page_icon="🎙️",
         layout="wide",
         initial_sidebar_state="expanded",
     )
 
-    # Initialize session state
     if "transcript" not in st.session_state:
         st.session_state.transcript = ""
-    if "seed_research" not in st.session_state:
-        st.session_state.seed_research = ""
-    if "deep_research" not in st.session_state:
-        st.session_state.deep_research = ""
-    if "cleaned_text" not in st.session_state:
-        st.session_state.cleaned_text = ""
-    if "atomic_graph" not in st.session_state:
-        st.session_state.atomic_graph = ""
 
     # ── Sidebar ──────────────────────────────────────────────────────────────
     with st.sidebar:
         st.title("⚙️ Settings")
+
+        st.markdown("### 🔑 API Key")
+        api_key = st.text_input(
+            "OpenCode API Key",
+            value="",
+            type="password",
+            placeholder="sk-...",
+            help="Enter your OpenCode Go API key. Get one at opencode.ai"
+        )
+
+        model_choice = st.selectbox(
+            "Model",
+            options=["mimo-v2-omni", "mimo-v2.5"],
+            index=0,
+            help="mimo-v2-omni: Best for audio (recommended). mimo-v2.5: Also supports audio."
+        )
 
         language = st.selectbox(
             "Language",
@@ -939,57 +661,32 @@ def main():
         )
 
         st.markdown("---")
-        st.markdown("### 📋 Pipeline Stages")
-        st.markdown("""
-        1. **🎤 Transcribe** — Audio → Text (MiMo V2.5)
-        2. **🌱 Seed Research** — Extract topics & claims
-        3. **🔬 Deep Research** — Adversarial analysis
-        4. **🔄 Circular Deps** — Structure & clean
-        5. **🧬 Atomic Graph** — Knowledge map
-        6. **🧠 RAG** — Second brain storage
-        """)
-
-        st.markdown("---")
-        st.markdown("### 🔧 API Config")
-        api_key = st.text_input(
-            "OpenCode API Key",
-            value=OPCODE_API_KEY,
-            type="password",
-            help="Your OpenCode Go API key"
-        )
-        if api_key != OPCODE_API_KEY:
-            os.environ["OPENCODE_API_KEY"] = api_key
-
-        model_choice = st.selectbox(
-            "Model",
-            options=["mimo-v2-omni", "mimo-v2.5"],
-            index=0,
-            help="mimo-v2-omni: Best for audio (recommended). mimo-v2.5: Also supports audio."
-        )
-        os.environ["MIMO_MODEL"] = model_choice
-
-        st.markdown("---")
         st.markdown("""
         <small>
         Powered by <b>MiMo V2.5</b> via OpenCode Go API<br/>
         Handles audio up to 1 hour with intelligent chunking<br/>
-        No pydub — uses ffmpeg (Python 3.13+ safe)<br/>
         Supports: MP3, WAV, M4A, OGG, WEBM, FLAC
         </small>
         """, unsafe_allow_html=True)
 
     # ── Main Area ────────────────────────────────────────────────────────────
-    st.title("🎙️ Audio → Knowledge Pipeline")
-    st.caption("Transcribe, research, structure, and store — powered by MiMo V2.5 ASR")
+    st.title("🎙️ Audio → Transcript")
+    st.caption("Convert audio to text — powered by MiMo V2.5 ASR")
+
+    # Warn if no API key
+    if not api_key:
+        st.warning("🔑 Please enter your OpenCode API key in the sidebar to continue.")
+        st.stop()
 
     # ── Step 1: Audio Input ──────────────────────────────────────────────────
-    st.markdown("## 🎤 Step 1: Audio Input")
+    st.markdown("## 🎤 Audio Input")
 
     tab1, tab2, tab3 = st.tabs(["📁 Upload Audio", "🎥 YouTube URL", "🎙️ Record Audio"])
 
     wav_path = None
     source_label = ""
     raw_audio_path = None
+    recorded_wav_bytes = None  # For .wav download of recording
 
     with tab1:
         st.markdown("### Upload an audio file")
@@ -1013,7 +710,6 @@ def main():
             key="yt_url"
         )
 
-        # Cookie upload for YouTube authentication
         st.caption("YouTube may require cookies for authentication.")
         cookies_file = st.file_uploader(
             "Upload cookies.txt (Netscape format)",
@@ -1053,13 +749,34 @@ def main():
             help="Click the microphone button to start recording"
         )
         if audio_value:
+            # Save the raw recording
             raw_audio_path = save_uploaded_file(audio_value)
             source_label = "Recording"
             st.audio(audio_value)
 
+            # Convert to WAV for .wav download
+            try:
+                wav_dl_path = convert_to_wav(raw_audio_path)
+                with open(wav_dl_path, "rb") as f:
+                    recorded_wav_bytes = f.read()
+            except Exception:
+                # If conversion fails, try to use raw bytes directly
+                recorded_wav_bytes = audio_value.getvalue()
+
+            # Provide .wav download button for recording
+            if recorded_wav_bytes:
+                st.download_button(
+                    "💾 Download recording as .wav",
+                    data=recorded_wav_bytes,
+                    file_name="recording.wav",
+                    mime="audio/wav",
+                    key="download_recording_wav"
+                )
+
     # ── Convert & Show Info ──────────────────────────────────────────────────
     st.markdown("---")
 
+    duration_min = 0.0
     if raw_audio_path:
         try:
             with st.spinner("Converting audio..."):
@@ -1082,7 +799,7 @@ def main():
 
     # ── Step 2: Transcribe ──────────────────────────────────────────────────
     if wav_path:
-        st.markdown("## 🚀 Step 2: Transcribe")
+        st.markdown("## 🚀 Transcribe")
 
         if st.button("🚀 Start Transcription", type="primary", key="transcribe_btn"):
             progress_bar = st.progress(0.0, text="Preparing audio...")
@@ -1097,6 +814,8 @@ def main():
             try:
                 transcript = transcribe_audio(
                     wav_path,
+                    api_key=api_key,
+                    model=model_choice,
                     language=language,
                     progress_callback=progress_callback
                 )
@@ -1118,7 +837,7 @@ def main():
         edited_transcript = st.text_area(
             "Transcript (editable)",
             value=st.session_state.transcript,
-            height=300,
+            height=400,
             key="transcript_output"
         )
         st.session_state.transcript = edited_transcript
@@ -1137,7 +856,7 @@ def main():
                 "📋 Download transcript.json",
                 data=json.dumps({
                     "source": source_label,
-                    "duration_minutes": round(duration_min, 2) if wav_path else 0,
+                    "duration_minutes": round(duration_min, 2),
                     "language": language,
                     "model": model_choice,
                     "transcript": edited_transcript,
@@ -1148,201 +867,7 @@ def main():
                 key="download_json"
             )
 
-        # ── Step 3: Seed Research ────────────────────────────────────────────
-        st.markdown("---")
-        st.markdown("## 🌱 Step 3: Seed Research")
-
-        if st.button("🌱 Run Seed Research", key="seed_btn"):
-            with st.spinner("Extracting topics and claims from transcript..."):
-                result = run_seed_research(edited_transcript, api_key)
-                if result["status"] == "success":
-                    st.session_state.seed_research = result["content"]
-                    st.success("✅ Seed research complete!")
-                else:
-                    st.error(f"❌ {result['content']}")
-
-        if st.session_state.seed_research:
-            seed_text = st.text_area(
-                "Seed Research (editable)",
-                value=st.session_state.seed_research,
-                height=300,
-                key="seed_output"
-            )
-            st.session_state.seed_research = seed_text
-            st.download_button(
-                "📄 Download seed_research.md",
-                data=seed_text.encode("utf-8"),
-                file_name="seed_research.md",
-                mime="text/markdown",
-                key="download_seed"
-            )
-
-            # ── Step 4: Deep Research ────────────────────────────────────────
-            st.markdown("---")
-            st.markdown("## 🔬 Step 4: Deep Research (Adversarial)")
-
-            if st.button("🔬 Run Deep Research", key="deep_btn"):
-                with st.spinner("Running adversarial analysis on seed research..."):
-                    result = run_deep_research(seed_text, api_key)
-                    if result["status"] == "success":
-                        st.session_state.deep_research = result["content"]
-                        st.success("✅ Deep research complete!")
-                    else:
-                        st.error(f"❌ {result['content']}")
-
-            if st.session_state.deep_research:
-                deep_text = st.text_area(
-                    "Deep Research (editable)",
-                    value=st.session_state.deep_research,
-                    height=300,
-                    key="deep_output"
-                )
-                st.session_state.deep_research = deep_text
-                st.download_button(
-                    "📄 Download deep_research.md",
-                    data=deep_text.encode("utf-8"),
-                    file_name="deep_research.md",
-                    mime="text/markdown",
-                    key="download_deep"
-                )
-
-        # ── Step 5: Circular Dependencies ────────────────────────────────────
-        st.markdown("---")
-        st.markdown("## 🔄 Step 5: Circular Dependencies Cleanup")
-
-        cleanup_input = st.radio(
-            "Input for cleanup:",
-            ["Transcript", "Seed Research", "Deep Research"],
-            key="cd_input_choice",
-            horizontal=True
-        )
-        cd_input_text = {
-            "Transcript": st.session_state.transcript,
-            "Seed Research": st.session_state.seed_research,
-            "Deep Research": st.session_state.deep_research,
-        }.get(cleanup_input, st.session_state.transcript)
-
-        if st.button("🔄 Run Circular Dependencies Cleanup", key="cd_btn",
-                     disabled=not cd_input_text):
-            with st.spinner("Cleaning and structuring text..."):
-                result = run_circular_dependencies(cd_input_text)
-                if result["status"] == "success":
-                    st.session_state.cleaned_text = result["content"]
-                    st.success("✅ Cleanup complete!")
-                else:
-                    st.error(f"❌ {result['content']}")
-
-        if st.session_state.cleaned_text:
-            cleaned_text = st.text_area(
-                "Cleaned Text (editable)",
-                value=st.session_state.cleaned_text,
-                height=300,
-                key="cd_output"
-            )
-            st.session_state.cleaned_text = cleaned_text
-            st.download_button(
-                "📄 Download cleaned.txt",
-                data=cleaned_text.encode("utf-8"),
-                file_name="transcript_cleaned.txt",
-                mime="text/plain",
-                key="download_cleaned"
-            )
-
-        # ── Step 6: Atomic Graph ────────────────────────────────────────────
-        st.markdown("---")
-        st.markdown("## 🧬 Step 6: Atomic Graph (Knowledge Map)")
-
-        graph_input = st.radio(
-            "Input for knowledge graph:",
-            ["Transcript", "Seed Research", "Deep Research", "Cleaned Text"],
-            key="ag_input_choice",
-            horizontal=True
-        )
-        ag_input_text = {
-            "Transcript": st.session_state.transcript,
-            "Seed Research": st.session_state.seed_research,
-            "Deep Research": st.session_state.deep_research,
-            "Cleaned Text": st.session_state.cleaned_text,
-        }.get(graph_input, st.session_state.transcript)
-
-        if st.button("🧬 Build Knowledge Graph", key="ag_btn",
-                     disabled=not ag_input_text):
-            with st.spinner("Building knowledge graph..."):
-                result = run_atomic_graph(ag_input_text)
-                if result["status"] == "success":
-                    st.session_state.atomic_graph = result["content"]
-                    st.success("✅ Knowledge graph built!")
-                else:
-                    st.error(f"❌ {result['content']}")
-
-        if st.session_state.atomic_graph:
-            graph_text = st.text_area(
-                "Knowledge Graph JSON",
-                value=st.session_state.atomic_graph,
-                height=300,
-                key="ag_output"
-            )
-            st.session_state.atomic_graph = graph_text
-            st.download_button(
-                "📄 Download atomic_graph.json",
-                data=graph_text.encode("utf-8"),
-                file_name="atomic_graph.json",
-                mime="application/json",
-                key="download_graph"
-            )
-
-        # ── Step 7: RAG Second Brain ────────────────────────────────────────
-        st.markdown("---")
-        st.markdown("## 🧠 Step 7: Second Brain (RAG)")
-
-        rag_input = st.radio(
-            "Document to store:",
-            ["Transcript", "Seed Research", "Deep Research", "Cleaned Text", "All Combined"],
-            key="rag_input_choice",
-            horizontal=True
-        )
-
-        rag_input_text = {
-            "Transcript": st.session_state.transcript,
-            "Seed Research": st.session_state.seed_research,
-            "Deep Research": st.session_state.deep_research,
-            "Cleaned Text": st.session_state.cleaned_text,
-            "All Combined": "\n\n---\n\n".join(filter(None, [
-                f"# TRANSCRIPT\n{st.session_state.transcript}",
-                f"# SEED RESEARCH\n{st.session_state.seed_research}",
-                f"# DEEP RESEARCH\n{st.session_state.deep_research}",
-                f"# CLEANED TEXT\n{st.session_state.cleaned_text}",
-            ])),
-        }.get(rag_input, st.session_state.transcript)
-
-        col_rag1, col_rag2 = st.columns(2)
-
-        with col_rag1:
-            if st.button("🧠 Save to Second Brain", key="rag_save_btn",
-                         disabled=not rag_input_text):
-                with st.spinner("Saving to Second Brain..."):
-                    result = save_to_rag(rag_input_text)
-                    if result["status"] == "success":
-                        st.success(f"✅ {result['content']}")
-                    else:
-                        st.error(f"❌ {result['content']}")
-
-        with col_rag2:
-            rag_query = st.text_input(
-                "Query Second Brain:",
-                placeholder="Ask a question about your stored documents...",
-                key="rag_query"
-            )
-            if st.button("🔍 Query", key="rag_query_btn", disabled=not rag_query):
-                with st.spinner("Querying Second Brain..."):
-                    result = query_rag(rag_query)
-                    if result["status"] == "success":
-                        st.markdown("### 📖 Answer")
-                        st.write(result["content"])
-                    else:
-                        st.error(f"❌ {result['content']}")
-
-    else:
+    elif not raw_audio_path:
         st.info("👆 Upload an audio file, enter a YouTube URL, or record audio to get started.")
 
 
