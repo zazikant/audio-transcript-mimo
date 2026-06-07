@@ -21,6 +21,7 @@ from pathlib import Path
 
 import streamlit as st
 from openai import OpenAI
+from audio_recorder_streamlit import audio_recorder
 
 # ─── Configuration ────────────────────────────────────────────────────────────
 
@@ -728,7 +729,6 @@ def main():
     wav_path = None
     source_label = ""
     raw_audio_path = None
-    recorded_wav_bytes = None  # For .wav download of recording
 
     with tab1:
         st.markdown("### Upload an audio file")
@@ -785,68 +785,36 @@ def main():
 
     with tab3:
         st.markdown("### Record audio from your microphone")
-        st.caption("Browser records in WebM format — the app will convert it to WAV automatically.")
-        audio_value = st.audio_input(
-            "Click to record",
-            key="audio_record",
-            help="Click the microphone button to start recording"
+        st.caption("Click the microphone to start/stop recording. Audio is captured in WAV format.")
+        wav_bytes = audio_recorder(
+            text="Click to record",
+            icon_name="microphone",
+            icon_size="2x",
+            pause_threshold=5.0,
+            key="audio_recorder"
         )
-        if audio_value:
-            # Save the raw recording (browser typically outputs WebM/Opus)
-            raw_audio_path = save_uploaded_file(audio_value)
+        if wav_bytes:
+            # audio_recorder returns real WAV bytes directly — no conversion needed
+            source_label = "Recording (WAV)"
 
-            # Detect the actual format of the recorded audio
-            actual_format = detect_audio_format(raw_audio_path)
-            log.info(f"Recording detected format: {actual_format}")
+            # Save WAV bytes to a temp file for processing
+            fd, recording_path = tempfile.mkstemp(suffix=".wav")
+            os.close(fd)
+            with open(recording_path, "wb") as f:
+                f.write(wav_bytes)
+            raw_audio_path = recording_path
 
-            if actual_format == "webm" or actual_format == "ogg" or actual_format == "unknown":
-                source_label = f"Recording ({actual_format.upper()} → WAV conversion required)"
-            else:
-                source_label = f"Recording ({actual_format.upper()})"
+            # Play back the recording
+            st.audio(wav_bytes, format="audio/wav")
 
-            st.audio(audio_value)
-
-            # Convert to proper WAV for download — must use ffmpeg for non-WAV formats
-            recorded_wav_bytes = None
-            conversion_error = None
-
-            try:
-                wav_dl_path = convert_to_wav(raw_audio_path)
-                # Verify the output is actually a valid WAV
-                verify_fmt = detect_audio_format(wav_dl_path)
-                if verify_fmt == "wav":
-                    with open(wav_dl_path, "rb") as f:
-                        recorded_wav_bytes = f.read()
-                else:
-                    conversion_error = f"Conversion produced {verify_fmt.upper()} instead of WAV"
-                    log.error(conversion_error)
-            except Exception as e:
-                conversion_error = str(e)
-                log.error(f"WAV conversion failed: {e}")
-
-            # Provide .wav download button only if conversion succeeded
-            if recorded_wav_bytes:
-                st.download_button(
-                    "💾 Download recording as .wav",
-                    data=recorded_wav_bytes,
-                    file_name="recording.wav",
-                    mime="audio/wav",
-                    key="download_recording_wav"
-                )
-            else:
-                # Conversion failed — provide the original format with a clear label
-                st.warning(
-                    f"⚠️ Could not convert recording to WAV ({conversion_error}). "
-                    f"The original {actual_format.upper()} file will be used for transcription "
-                    f"but may not play correctly in all players."
-                )
-                st.download_button(
-                    f"💾 Download recording as .{actual_format}",
-                    data=audio_value.getvalue(),
-                    file_name=f"recording.{actual_format}",
-                    mime=f"audio/{actual_format}",
-                    key="download_recording_raw"
-                )
+            # Download button — these are real WAV bytes, no conversion needed
+            st.download_button(
+                "💾 Download recording as .wav",
+                data=wav_bytes,
+                file_name="recording.wav",
+                mime="audio/wav",
+                key="download_recording_wav"
+            )
 
     # ── Convert & Show Info ──────────────────────────────────────────────────
     st.markdown("---")
