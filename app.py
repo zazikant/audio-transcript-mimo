@@ -988,11 +988,9 @@ def main():
             try:
                 from audio_recorder_streamlit import audio_recorder
                 audio_bytes = audio_recorder(
-                    icon="🎤",
                     sample_rate=16000,
                     energy_threshold=(-1.0, 1.0),
                     pause_threshold=600.0,
-                    key="audio_recorder_widget"
                 )
                 if audio_bytes:
                     # Save raw recording bytes to a temp WAV file
