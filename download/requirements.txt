@@ -1,4 +1,0 @@
-streamlit
-openai
-yt-dlp
-audio-recorder-streamlit
