@@ -1,13 +1,13 @@
 """
-Audio → Transcript — MiMo V2.5 / Groq Whisper
+Audio → Transcript — MiMo V2.6 Pro / Groq Whisper
 ===============================================
 Converts audio (uploaded, recorded, or from YouTube) to transcript
-using MiMo V2.5 ASR (via OpenCode Go API) or Groq Whisper.
+using MiMo V2.6 Pro ASR (via OpenCode Go API) or Groq Whisper.
 
 Pipeline:
   1. Audio input (upload / YouTube / record)
   2. Convert to 16 kHz mono WAV (ffmpeg or pure-Python fallback)
-  3. Transcribe via selected provider (MiMo V2.5 or Groq Whisper)
+  3. Transcribe via selected provider (MiMo V2.6 Pro or Groq Whisper)
   4. Display editable transcript with download / copy
 
 API keys persist in URL query params so they survive page reload.
@@ -33,7 +33,7 @@ from openai import OpenAI
 # ─── Configuration ────────────────────────────────────────────────────────────
 
 OPCODE_BASE_URL = "https://opencode.ai/zen/go/v1"
-MIMO_MODEL = "mimo-v2.5"
+MIMO_MODEL = "mimo-v2.6-pro"
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 GROQ_WHISPER_MODEL = "whisper-large-v3"
 
@@ -156,7 +156,7 @@ def safe_transcript_display(text: str, view_mode: str = "Rendered"):
 # ─── API Clients ──────────────────────────────────────────────────────────────
 
 def get_opencode_client(api_key: str) -> OpenAI:
-    """Create an OpenAI client pointed at OpenCode Go API (MiMo V2.5)."""
+    """Create an OpenAI client pointed at OpenCode Go API (MiMo V2.6 Pro)."""
     return OpenAI(
         base_url=OPCODE_BASE_URL,
         api_key=api_key,
@@ -558,11 +558,11 @@ def detect_audio_format(filepath: str) -> str:
         return "unknown"
 
 
-# ─── Transcription: MiMo V2.5 ───────────────────────────────────────────────
+# ─── Transcription: MiMo V2.6 Pro ───────────────────────────────────────────────
 
 def transcribe_chunk_mimo(wav_path: str, api_key: str,
                           language: str = "en", prompt_context: str = "") -> str:
-    """Transcribe a single audio chunk using MiMo V2.5 via OpenCode Go API."""
+    """Transcribe a single audio chunk using MiMo V2.6 Pro via OpenCode Go API."""
     client = get_opencode_client(api_key)
 
     audio_b64 = wav_to_base64(wav_path)
@@ -644,7 +644,7 @@ def transcribe_chunk_mimo(wav_path: str, api_key: str,
             error_str = str(e)
             log.error(f"MiMo API error (attempt {attempt+1}): {e}")
             if "image input" in error_str.lower() or "no endpoints found" in error_str.lower():
-                return "[TRANSCRIPTION_ERROR: MiMo V2.5 does not support audio input on this endpoint.]"
+                return "[TRANSCRIPTION_ERROR: MiMo V2.6 Pro does not support audio input on this endpoint.]"
             if attempt < max_retries - 1:
                 time.sleep(3 * (attempt + 1))
             else:
@@ -831,7 +831,7 @@ def download_youtube_audio(url: str, cookies_path: str = None) -> tuple[str, str
 
 def main():
     st.set_page_config(
-        page_title="Audio → Transcript | MiMo V2.5 / Groq Whisper",
+        page_title="Audio → Transcript | MiMo V2.6 Pro / Groq Whisper",
         page_icon="🎙️",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -848,8 +848,8 @@ def main():
         provider = st.radio(
             "Transcription Provider",
             options=["mimo", "groq"],
-            format_func=lambda x: "🤖 MiMo V2.5 (OpenCode)" if x == "mimo" else "⚡ Groq Whisper",
-            help="MiMo V2.5: Omnimodal ASR via OpenCode Go API. Groq: Fast Whisper-based transcription."
+            format_func=lambda x: "🤖 MiMo V2.6 Pro (OpenCode)" if x == "mimo" else "⚡ Groq Whisper",
+            help="MiMo V2.6 Pro: Omnimodal ASR via OpenCode Go API. Groq: Fast Whisper-based transcription."
         )
 
         st.markdown("---")
@@ -904,7 +904,7 @@ def main():
         st.markdown("---")
         st.markdown("""
         <small>
-        <b>MiMo V2.5</b>: Omnimodal ASR (OpenCode Go API)<br/>
+        <b>MiMo V2.6 Pro</b>: Omnimodal ASR (OpenCode Go API)<br/>
         <b>Groq Whisper</b>: Fast Whisper-large-v3 transcription<br/>
         Handles audio up to 1 hour with intelligent chunking<br/>
         Supports: MP3, WAV, M4A, OGG, WEBM, FLAC
@@ -913,7 +913,7 @@ def main():
 
     # ── Main Area ────────────────────────────────────────────────────────────
     st.title("🎙️ Audio → Transcript")
-    provider_label = "MiMo V2.5" if provider == "mimo" else "Groq Whisper"
+    provider_label = "MiMo V2.6 Pro" if provider == "mimo" else "Groq Whisper"
     st.caption(f"Convert audio to text — powered by {provider_label}")
 
     # Warn if no API key
@@ -1158,10 +1158,10 @@ def main():
                     1. **Input**: Upload audio, paste a YouTube URL, or record from your mic
                     2. **Convert**: Audio is converted to 16 kHz mono WAV (ffmpeg or pure-Python fallback)
                     3. **Chunk**: Long audio is split into overlapping segments for reliable transcription
-                    4. **Transcribe**: Each chunk is sent to your selected provider (MiMo V2.5 or Groq Whisper)
+                    4. **Transcribe**: Each chunk is sent to your selected provider (MiMo V2.6 Pro or Groq Whisper)
                     5. **Merge**: Overlapping chunks are stitched together with deduplication
 
-                    **MiMo V2.5**: Omnimodal ASR model, handles long context well.
+                    **MiMo V2.6 Pro**: Omnimodal ASR model, handles long context well.
                     **Groq Whisper**: Ultra-fast transcription using Whisper-large-v3 on Groq's LPU infrastructure.
 
                     **API keys persist in your URL** — reload the page and they'll still be there.

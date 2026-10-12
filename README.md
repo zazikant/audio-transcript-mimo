@@ -1,6 +1,6 @@
-# Audio → Transcript | MiMo V2.5 ASR
+# Audio → Transcript | MiMo V2.6 Pro ASR
 
-Convert audio to text using MiMo V2.5 omnimodal ASR via OpenCode Go API.
+Convert audio to text using MiMo V2.6 Pro omnimodal ASR via OpenCode Go API.
 
 ## Features
 
@@ -21,7 +21,7 @@ This repo is ready to deploy on Streamlit Cloud. The `packages.txt` ensures `ffm
 
 ## Tech
 
-- **MiMo V2.5** (OpenCode Go API) — omnimodal ASR
+- **MiMo V2.6 Pro** (OpenCode Go API) — omnimodal ASR
 - **ffmpeg** — audio conversion and chunking
 - **Pure-Python WAV fallback** — works without ffmpeg for WAV files
 - **No pydub** — Python 3.13+ safe
