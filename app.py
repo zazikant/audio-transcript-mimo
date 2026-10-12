@@ -155,11 +155,22 @@ def safe_transcript_display(text: str, view_mode: str = "Rendered"):
 
 # ─── API Clients ──────────────────────────────────────────────────────────────
 
+# OpenCode Go API requires an x-opencode-session header for request routing.
+# One stable id per Streamlit session keeps all chunks routed to the same
+# upstream instance (better caching, fewer routing errors).
+import uuid as _uuid
+if "opencode_session_id" not in st.session_state:
+    st.session_state["opencode_session_id"] = f"audio-mimo-{_uuid.uuid4().hex[:12]}"
+
+
 def get_opencode_client(api_key: str) -> OpenAI:
     """Create an OpenAI client pointed at OpenCode Go API (MiMo V2.6 Pro)."""
     return OpenAI(
         base_url=OPCODE_BASE_URL,
         api_key=api_key,
+        default_headers={
+            "x-opencode-session": st.session_state["opencode_session_id"],
+        },
     )
 
 
